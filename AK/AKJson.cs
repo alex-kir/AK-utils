@@ -26,10 +26,10 @@
 
 using System;
 using System.Collections;
-using System.Globalization;
-using System.Text;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Text;
 
 #if !NETFX_CORE
 using System.Reflection;
@@ -59,92 +59,443 @@ public class AKJson
 
     private const int BUILDER_CAPACITY = 2000;
 
-    private int lastErrorIndex = -1;
-    private string lastDecode = "";
+    #region Encoding
 
-    public static object Decode(string json)
+    public static string Encode(object json)
     {
-        return new AKJson().JsonDecode(json);
+        json = PrepeareForEncoding(json);
+        return new AKJson().EncodeJson(json);
     }
 
-    public static string Encode(object json, bool checkAttrs = false)
+    private string EncodeJson(object json)
     {
-        if (checkAttrs)
-            json = PrepeareObject(json);
-        return new AKJson().JsonEncode(json);
+        StringBuilder builder = new StringBuilder(BUILDER_CAPACITY);
+        bool success = EncodeValue(json, builder);
+        return (success ? builder.ToString() : null);
     }
-        
-    private object JsonDecode(string json)
-    {
-        // save the string for debug information
-        lastDecode = json;
 
-        if (!string.IsNullOrEmpty(json))
+    private static object PrepeareForEncoding(object source)
+    {
+        if (source == null)
+            return null;
+
+        //-----------------------------------------
+        object[] typeAttributes = source.GetType().GetCustomAttributes(typeof(AKJson.Serializable), true);
+        if (typeAttributes.Length > 0)
         {
-            char[] charArray = json.ToCharArray();
-			if (charArray.Length == 0)
-				return null;
-			
-            int index = 0;
-            bool success = true;
-            object value = ParseValue(charArray, ref index, ref success);
-            if (success)
+            var ret = new Dictionary<string, object>();
+
+            // --- Scan Properties ---
+            foreach (var property in source.GetType().GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.GetProperty | BindingFlags.SetProperty))
             {
-                lastErrorIndex = -1;
+                var propertyAttributes = property.GetCustomAttributes(typeof(AKJson.Serializable), true);
+                if (propertyAttributes.Length > 0)
+                {
+                    ret[property.Name] = PrepeareForEncoding(property.GetValue(source, null));
+                }
+            }
+
+            // --- Scan Fields ---
+            foreach (var field in source.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+            {
+                var fieldAttributes = field.GetCustomAttributes(typeof(AKJson.Serializable), true);
+                if (fieldAttributes.Length > 0)
+                {
+                    ret[field.Name] = PrepeareForEncoding(field.GetValue(source));
+                }
+            }
+
+            return ret;
+        }
+        //-----------------------------------------
+        {
+            var dictionary = (source as IDictionary);
+            if (dictionary != null)
+            {
+                var ret = new Dictionary<string, object>();
+                foreach (var key in dictionary.Keys)
+                    ret.Add(Convert.ToString(key), PrepeareForEncoding(dictionary[key]));
+                return ret;
+            }
+        }
+        //-----------------------------------------
+        if (source is string)
+        {
+            return source as string;
+        }
+        //-----------------------------------------
+        {
+            var list = source as IEnumerable;
+            if (list != null)
+            {
+                var ret = new List<object>();
+                foreach (object item in list)
+                    ret.Add(PrepeareForEncoding(item));
+                return ret;
+            }
+        }
+        return source;
+    }
+
+    private bool EncodeValue(object value, StringBuilder builder)
+    {
+        if (value is string)
+        {
+            EncodeString((string)value, builder);
+        }
+        else if (value is IDictionary)
+        {
+            EncodeObject((IDictionary)value, builder);
+        }
+        else if (value is ICollection)
+        {
+            EncodeArray((ICollection)value, builder);
+        }
+        else if (IsNumeric(value))
+        {
+            EncodeNumber(Convert.ToDouble(value), builder);
+        }
+        else if ((value is Boolean) && ((Boolean)value == true))
+        {
+            builder.Append("true");
+        }
+        else if ((value is Boolean) && ((Boolean)value == false))
+        {
+            builder.Append("false");
+        }
+        else if (value == null)
+        {
+            builder.Append("null");
+        }
+        else
+        {
+            return false;
+        }
+        return true;
+    }
+
+    private bool EncodeObject(IDictionary anObject, StringBuilder builder)
+    {
+        builder.Append("{");
+
+        IDictionaryEnumerator e = anObject.GetEnumerator();
+        bool first = true;
+        while (e.MoveNext())
+        {
+            string key = e.Key.ToString();
+            object value = e.Value;
+
+            if (!first)
+            {
+                builder.Append(", ");
+            }
+
+            EncodeString(key, builder);
+            builder.Append(":");
+            if (!EncodeValue(value, builder))
+            {
+                return false;
+            }
+
+            first = false;
+        }
+
+        builder.Append("}");
+        return true;
+    }
+
+    private bool EncodeArray(ICollection anArray, StringBuilder builder)
+    {
+        builder.Append("[");
+
+        bool first = true;
+        //      int i = 0;
+        foreach (object value in anArray)
+        {
+            if (!first)
+            {
+                builder.Append(", ");
+            }
+
+            if (!EncodeValue(value, builder))
+            {
+                return false;
+            }
+
+            first = false;
+        }
+
+        builder.Append("]");
+        return true;
+    }
+
+    private void EncodeString(string aString, StringBuilder builder)
+    {
+        builder.Append("\"");
+
+        char[] charArray = aString.ToCharArray();
+        for (int i = 0; i < charArray.Length; i++)
+        {
+            char c = charArray[i];
+            if (c == '"')
+            {
+                builder.Append("\\\"");
+            }
+            else if (c == '\\')
+            {
+                builder.Append("\\\\");
+            }
+            else if (c == '\b')
+            {
+                builder.Append("\\b");
+            }
+            else if (c == '\f')
+            {
+                builder.Append("\\f");
+            }
+            else if (c == '\n')
+            {
+                builder.Append("\\n");
+            }
+            else if (c == '\r')
+            {
+                builder.Append("\\r");
+            }
+            else if (c == '\t')
+            {
+                builder.Append("\\t");
             }
             else
             {
-                lastErrorIndex = index;
+                int codepoint = Convert.ToInt32(c);
+                if ((codepoint >= 32) && (codepoint <= 126))
+                {
+                    builder.Append(c);
+                }
+                else
+                {
+                    builder.Append("\\u" + Convert.ToString(codepoint, 16).PadLeft(4, '0'));
+                }
             }
-            return value;
         }
-        else
+
+        builder.Append("\"");
+    }
+
+    private void EncodeNumber(double number, StringBuilder builder)
+    {
+        builder.Append(Convert.ToString(number, CultureInfo.InvariantCulture));
+    }
+
+    private bool IsNumeric(object o)
+    {
+        try
+        {
+            Double.Parse(o.ToString());
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+        return true;
+    }
+
+    #endregion
+
+    #region Decoding
+
+    public static object Decode(string json)
+    {
+        return new AKJson().DecodeJson(json);
+    }
+
+    public static T Decode<T>(string json) where T : class
+    {
+        object obj = new AKJson().DecodeJson(json);
+        return (T)TransformObject(obj, typeof(T));
+    }
+
+    public static T DecodeOrNull<T>(string json) where T : class
+    {
+        try
+        {
+            object obj = new AKJson().DecodeJson(json);
+            if (obj == null)
+                return null;
+            return (T)TransformObject(obj, typeof(T));
+        }
+        catch
         {
             return null;
         }
     }
-        
-    private string JsonEncode(object json)
-    {
-        StringBuilder builder = new StringBuilder(BUILDER_CAPACITY);
-        bool success = SerializeValue(json, builder);
-        return (success ? builder.ToString() : null);
-    }
-        
-    private bool LastDecodeSuccessful()
-    {
-        return (lastErrorIndex == -1);
-    }
-        
-    private int GetLastErrorIndex()
-    {
-        return lastErrorIndex;
-    }
-        
-    private string GetLastErrorSnippet()
-    {
-        if (lastErrorIndex == -1)
-        {
-            return "";
-        }
-        else
-        {
-            int startIndex = lastErrorIndex - 5;
-            int endIndex = lastErrorIndex + 15;
-            if (startIndex < 0)
-            {
-                startIndex = 0;
-            }
-            if (endIndex >= lastDecode.Length)
-            {
-                endIndex = lastDecode.Length - 1;
-            }
 
-            return lastDecode.Substring(startIndex, endIndex - startIndex + 1);
-        }
+    public static T TransformObject<T>(object source)
+    {
+        return (T)TransformObject(source, typeof(T));
     }
 
-    private Dictionary<object, object> ParseObject(char[] json, ref int index)
+    private static object TransformObject(object source, Type type)
+    {
+        if (type == null)
+            throw new ArgumentNullException("type", "Transform object failed");
+        if (source == null)
+            return source;
+
+        #if !NETFX_CORE
+        bool isGeneric = type.IsGenericType;
+        #else
+        bool isGeneric = type.IsGenericType();
+        #endif
+
+        //-----------------------------------------
+        if (isGeneric && type.GetGenericTypeDefinition() == typeof(Dictionary<,>))
+        {
+            var dictionary = (source as IDictionary);
+            Type keyType = type.GetGenericArguments()[0];
+            Type valueType = type.GetGenericArguments()[1];
+            var ret = (IDictionary)Activator.CreateInstance(type);
+            foreach (var key in dictionary.Keys)
+            {
+                ret.Add(TransformObject(key, keyType), TransformObject(dictionary[key], valueType));
+            }
+            return ret;
+        }
+
+        if (type.GetCustomAttributes(typeof(AKJson.Serializable), true).Length > 0)
+        {
+            var dictionary = (source as IDictionary);
+            var ret = Activator.CreateInstance(type);
+
+            // --- Scan Properties ---
+            foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.GetProperty | BindingFlags.SetProperty))
+            {
+                var propertyAttributes = property.GetCustomAttributes(typeof(AKJson.Serializable), true);
+                if (propertyAttributes.Length > 0 && dictionary.Contains(property.Name))
+                {
+                    var val = TransformObject(dictionary[property.Name], property.PropertyType);
+                    property.SetValue(ret, val, null);
+                }
+            }
+
+            // --- Scan Fields ---
+            foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+            {
+                var fieldAttributes = field.GetCustomAttributes(typeof(AKJson.Serializable), true);
+                if (fieldAttributes.Length > 0 && dictionary.Contains(field.Name))
+                {
+                    var val = TransformObject(dictionary[field.Name], field.FieldType);
+                    field.SetValue(ret, val);
+                }
+            }
+
+            return ret;
+        }
+        //-----------------------------------------
+        if (isGeneric && type.GetGenericTypeDefinition() == typeof(List<>))
+        {
+            var list = source as IEnumerable;
+            Type itemType = type.GetGenericArguments()[0];
+            var ret = (IList)Activator.CreateInstance(type);
+            foreach (object item in list)
+            {
+                ret.Add(TransformObject(item, itemType));
+            }
+            return ret;
+        }
+        if (type.IsArray)
+        {
+            var list = source as IList;
+            var ret = (Array)Activator.CreateInstance(type, new object[]{ list.Count });
+            var valueType = type.GetElementType();
+            int index = 0;
+            foreach (var item in list)
+            {
+                ret.SetValue(TransformObject(item, valueType), index);
+                index++;
+            }
+            return ret;
+        }
+        //-----------------------------------------
+        if (type == typeof(string))
+        {
+            return Convert.ToString(source);
+        }
+        //-----------------------------------------
+        if (type == typeof(bool))
+        {
+            return Convert.ToBoolean(source);
+        }
+        //-----------------------------------------
+        if (type == typeof(int))
+        {
+            return Convert.ToInt32(source);
+        }
+        //-----------------------------------------
+        if (type == typeof(float))
+        {
+            return Convert.ToSingle(source);
+        }
+        //-----------------------------------------
+        if (type == typeof(double))
+        {
+            return Convert.ToDouble(source);
+        }
+        //-----------------------------------------
+        if (type == typeof(object))
+        {
+            return source;
+        }
+        throw new ArgumentException(string.Format("No ways found to transfom object from '{0}' type  to '{1}' type.", source.GetType().Name, type.Name));
+    }
+
+    private object DecodeJson(string json)
+    {
+        if (string.IsNullOrEmpty(json))
+            throw new ArgumentNullException("json");
+
+        char[] charArray = json.ToCharArray();
+        if (charArray.Length == 0)
+            return null;
+
+        int index = 0;
+        bool success = true;
+        object value = DecodeValue(charArray, ref index, ref success);
+        if (!success)
+            throw new Exception("Decode failed");
+        return value;
+    }
+
+    private object DecodeValue(char[] json, ref int index, ref bool success)
+    {
+        switch (LookAhead(json, index))
+        {
+            case AKJson.TOKEN_STRING:
+                return DecodeString(json, ref index);
+            case AKJson.TOKEN_NUMBER:
+                return DecodeNumber(json, ref index);
+            case AKJson.TOKEN_CURLY_OPEN:
+                return DecodeObject(json, ref index);
+            case AKJson.TOKEN_SQUARED_OPEN:
+                return DecodeArray(json, ref index);
+            case AKJson.TOKEN_TRUE:
+                NextToken(json, ref index);
+                return Boolean.Parse("TRUE");
+            case AKJson.TOKEN_FALSE:
+                NextToken(json, ref index);
+                return Boolean.Parse("FALSE");
+            case AKJson.TOKEN_NULL:
+                NextToken(json, ref index);
+                return null;
+            case AKJson.TOKEN_NONE:
+                break;
+        }
+
+        success = false;
+        return null;
+    }
+
+    private Dictionary<object, object> DecodeObject(char[] json, ref int index)
     {
         Dictionary<object, object> dict = new Dictionary<object, object>();
         int token;
@@ -173,7 +524,7 @@ public class AKJson
             {
 
                 // name
-                string name = ParseString(json, ref index);
+                string name = DecodeString(json, ref index);
                 if (name == null)
                 {
                     return null;
@@ -188,7 +539,7 @@ public class AKJson
 
                 // value
                 bool success = true;
-                object value = ParseValue(json, ref index, ref success);
+                object value = DecodeValue(json, ref index, ref success);
                 if (!success)
                 {
                     return null;
@@ -201,7 +552,7 @@ public class AKJson
         return dict;
     }
 
-    private List<object> ParseArray(char[] json, ref int index)
+    private List<object> DecodeArray(char[] json, ref int index)
     {
         List<object> list = new List<object>();
 
@@ -228,7 +579,7 @@ public class AKJson
             else
             {
                 bool success = true;
-                object value = ParseValue(json, ref index, ref success);
+                object value = DecodeValue(json, ref index, ref success);
                 if (!success)
                 {
                     return null;
@@ -241,36 +592,7 @@ public class AKJson
         return list;
     }
 
-    private object ParseValue(char[] json, ref int index, ref bool success)
-    {
-        switch (LookAhead(json, index))
-        {
-            case AKJson.TOKEN_STRING:
-                return ParseString(json, ref index);
-            case AKJson.TOKEN_NUMBER:
-                return ParseNumber(json, ref index);
-            case AKJson.TOKEN_CURLY_OPEN:
-                return ParseObject(json, ref index);
-            case AKJson.TOKEN_SQUARED_OPEN:
-                return ParseArray(json, ref index);
-            case AKJson.TOKEN_TRUE:
-                NextToken(json, ref index);
-                return Boolean.Parse("TRUE");
-            case AKJson.TOKEN_FALSE:
-                NextToken(json, ref index);
-                return Boolean.Parse("FALSE");
-            case AKJson.TOKEN_NULL:
-                NextToken(json, ref index);
-                return null;
-            case AKJson.TOKEN_NONE:
-                break;
-        }
-
-        success = false;
-        return null;
-    }
-
-    private string ParseString(char[] json, ref int index)
+    private string DecodeString(char[] json, ref int index)
     {
         StringBuilder s = new StringBuilder(BUILDER_CAPACITY);
         char c;
@@ -372,7 +694,7 @@ public class AKJson
         return s.ToString();
     }
 
-    private double ParseNumber(char[] json, ref int index)
+    private double DecodeNumber(char[] json, ref int index)
     {
         EatWhitespace(json, ref index);
 
@@ -500,392 +822,6 @@ public class AKJson
         }
 
         return AKJson.TOKEN_NONE;
-    }
-
-    private bool SerializeObjectOrArray(object objectOrArray, StringBuilder builder)
-    {
-        if (objectOrArray is Dictionary<object, object>)
-        {
-            return SerializeObject((Dictionary<object, object>)objectOrArray, builder);
-        }
-        else if (objectOrArray is List<object>)
-        {
-            return SerializeArray((List<object>)objectOrArray, builder);
-        }
-        else
-        {
-            return false;
-        }
-    }
-
-    private bool SerializeObject(IDictionary anObject, StringBuilder builder)
-    {
-        builder.Append("{");
-
-        IDictionaryEnumerator e = anObject.GetEnumerator();
-        bool first = true;
-        while (e.MoveNext())
-        {
-            string key = e.Key.ToString();
-            object value = e.Value;
-
-            if (!first)
-            {
-                builder.Append(", ");
-            }
-
-            SerializeString(key, builder);
-            builder.Append(":");
-            if (!SerializeValue(value, builder))
-            {
-                return false;
-            }
-
-            first = false;
-        }
-
-        builder.Append("}");
-        return true;
-    }
-
-    private bool SerializeArray(ICollection anArray, StringBuilder builder)
-    {
-        builder.Append("[");
-
-        bool first = true;
-        //		int i = 0;
-        foreach (object value in anArray)
-        {
-            if (!first)
-            {
-                builder.Append(", ");
-            }
-
-            if (!SerializeValue(value, builder))
-            {
-                return false;
-            }
-
-            first = false;
-        }
-
-        builder.Append("]");
-        return true;
-    }
-
-    private bool SerializeValue(object value, StringBuilder builder)
-    {
-        if (value is string)
-        {
-            SerializeString((string)value, builder);
-        }
-        else if (value is IDictionary)
-        {
-            SerializeObject((IDictionary)value, builder);
-        }
-        else if (value is ICollection)
-        {
-            SerializeArray((ICollection)value, builder);
-        }
-        else if (IsNumeric(value))
-        {
-            SerializeNumber(Convert.ToDouble(value), builder);
-        }
-        else if ((value is Boolean) && ((Boolean)value == true))
-        {
-            builder.Append("true");
-        }
-        else if ((value is Boolean) && ((Boolean)value == false))
-        {
-            builder.Append("false");
-        }
-        else if (value == null)
-        {
-            builder.Append("null");
-        }
-        else
-        {
-            return false;
-        }
-        return true;
-    }
-
-    private void SerializeString(string aString, StringBuilder builder)
-    {
-        builder.Append("\"");
-
-        char[] charArray = aString.ToCharArray();
-        for (int i = 0; i < charArray.Length; i++)
-        {
-            char c = charArray[i];
-            if (c == '"')
-            {
-                builder.Append("\\\"");
-            }
-            else if (c == '\\')
-            {
-                builder.Append("\\\\");
-            }
-            else if (c == '\b')
-            {
-                builder.Append("\\b");
-            }
-            else if (c == '\f')
-            {
-                builder.Append("\\f");
-            }
-            else if (c == '\n')
-            {
-                builder.Append("\\n");
-            }
-            else if (c == '\r')
-            {
-                builder.Append("\\r");
-            }
-            else if (c == '\t')
-            {
-                builder.Append("\\t");
-            }
-            else
-            {
-                int codepoint = Convert.ToInt32(c);
-                if ((codepoint >= 32) && (codepoint <= 126))
-                {
-                    builder.Append(c);
-                }
-                else
-                {
-                    builder.Append("\\u" + Convert.ToString(codepoint, 16).PadLeft(4, '0'));
-                }
-            }
-        }
-
-        builder.Append("\"");
-    }
-
-    private void SerializeNumber(double number, StringBuilder builder)
-    {
-        builder.Append(Convert.ToString(number, CultureInfo.InvariantCulture));
-    }
-        
-    private bool IsNumeric(object o)
-    {
-        try
-        {
-            Double.Parse(o.ToString());
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-        return true;
-    }
-
-    #region Decode<T>
-
-	public static T Decode<T>(string json) where T : class
-	{
-		object obj = new AKJson().JsonDecode(json);
-		return (T)TransformObject(obj, typeof(T));
-	}
-
-    public static T DecodeOrNull<T>(string json) where T : class
-    {
-        try
-        {
-            object obj = new AKJson().JsonDecode(json);
-            if (obj == null)
-                return null;
-			return (T)TransformObject(obj, typeof(T));
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-	public static T TransformObject<T>(object source)
-	{
-		return (T)TransformObject(source, typeof(T));
-	}
-
-	private static object TransformObject(object source, Type type)
-    {
-        if (source == null)
-            return source;
-
-#if !NETFX_CORE
-		bool isGeneric = type.IsGenericType;
-#else
-		bool isGeneric = type.IsGenericType();
-#endif
-        {
-            var dictionary = (source as IDictionary);
-            if (dictionary != null && isGeneric && type.GetGenericTypeDefinition() == typeof(Dictionary<,>))
-            {
-                Type keyType = type.GetGenericArguments()[0];
-                Type valueType = type.GetGenericArguments()[1];
-                var ret = (IDictionary)Activator.CreateInstance(type);
-                foreach (var key in dictionary.Keys)
-                {
-					ret.Add(TransformObject(key, keyType), TransformObject(dictionary[key], valueType));
-                }
-                return ret;
-            }
-
-            object[] typeAttributes = type.GetCustomAttributes(typeof(AKJson.Serializable), true);
-            if (dictionary != null && typeAttributes.Length > 0)
-            {
-                var ret = Activator.CreateInstance(type);
-
-                // --- Scan Properties ---
-                foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.GetProperty | BindingFlags.SetProperty))
-                {
-                    var propertyAttributes = property.GetCustomAttributes(typeof(AKJson.Serializable), true);
-                    if (propertyAttributes.Length > 0 && dictionary.Contains(property.Name))
-                    {
-                        var val = TransformObject(dictionary[property.Name], property.PropertyType);
-                        property.SetValue(ret, val, null);
-                    }
-                }
-
-                // --- Scan Fields ---
-                foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
-                {
-                    var fieldAttributes = field.GetCustomAttributes(typeof(AKJson.Serializable), true);
-                    if (fieldAttributes.Length > 0 && dictionary.Contains(field.Name))
-                    {
-                        var val = TransformObject(dictionary[field.Name], field.FieldType);
-                        field.SetValue(ret, val);
-                    }
-                }
-
-                return ret;
-            }
-
-        }
-        //-----------------------------------------
-        {
-            var list = source as IEnumerable;
-            if (list != null && isGeneric && type.GetGenericTypeDefinition() == typeof(List<>))
-            {
-                Type itemType = type.GetGenericArguments()[0];
-                var ret = (IList)Activator.CreateInstance(type);
-                foreach (object item in list)
-                {
-					ret.Add(TransformObject(item, itemType));
-                }
-                return ret;
-            }
-            if (list is IList && type.IsArray)
-            {
-                int count = ((IList)list).Count;
-                var ret = (Array)Activator.CreateInstance(type, new object[]{ count });
-                var valueType = type.GetElementType();
-                int index = 0;
-                foreach (var item in list)
-                {
-                    ret.SetValue(TransformObject(item, valueType), index);
-                    index++;
-                }
-                return ret;
-            }
-        }
-        //-----------------------------------------
-        if (type == typeof(string))
-        {
-            return Convert.ToString(source);
-        }
-        //-----------------------------------------
-        if (type == typeof(bool))
-        {
-            return Convert.ToBoolean(source);
-        }
-        //-----------------------------------------
-		if (type == typeof(int))
-        {
-			return Convert.ToInt32(source);
-        }
-		//-----------------------------------------
-		if (type == typeof(float))
-		{
-			return Convert.ToSingle(source);
-		}
-		//-----------------------------------------
-		if (type == typeof(double))
-		{
-			return Convert.ToDouble(source);
-		}
-        //-----------------------------------------
-        if (type == typeof(object))
-        {
-            return source;
-        }
-        
-        throw new ArgumentException("AKJson.TransfomObject() source '" + source.GetType().Name + "' type is not convertable to '" + (type == null ? "null" : type.Name), "' type");
-    }
-
-    private static object PrepeareObject(object source)
-    {
-        if (source == null)
-            return null;
-
-        //-----------------------------------------
-        object[] typeAttributes = source.GetType().GetCustomAttributes(typeof(AKJson.Serializable), true);
-        if (typeAttributes.Length > 0)
-        {
-            var ret = new Hashtable();
-
-            // --- Scan Properties ---
-            foreach (var property in source.GetType().GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.GetProperty | BindingFlags.SetProperty))
-            {
-                var propertyAttributes = property.GetCustomAttributes(typeof(AKJson.Serializable), true);
-                if (propertyAttributes.Length > 0)
-                {
-                    ret[property.Name] = PrepeareObject(property.GetValue(source, null));
-                }
-            }
-
-            // --- Scan Fields ---
-            foreach (var field in source.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
-            {
-                var fieldAttributes = field.GetCustomAttributes(typeof(AKJson.Serializable), true);
-                if (fieldAttributes.Length > 0)
-                {
-                    ret[field.Name] = PrepeareObject(field.GetValue(source));
-                }
-            }
-
-            return ret;
-        }
-        //-----------------------------------------
-        {
-            var dictionary = (source as IDictionary);
-            if (dictionary != null)
-            {
-                var ret = new Hashtable();
-                foreach (var key in dictionary.Keys)
-                    ret.Add(PrepeareObject(key), PrepeareObject(dictionary[key]));
-                return ret;
-            }
-        }
-        //-----------------------------------------
-        if (source is string)
-        {
-            return source as string;
-        }
-        //-----------------------------------------
-        {
-            var list = source as IEnumerable;
-            if (list != null)
-            {
-                var ret = new ArrayList();
-                foreach (object item in list)
-                    ret.Add(PrepeareObject(item));
-                return ret;
-            }
-        }
-        return source;
     }
 
     #endregion
