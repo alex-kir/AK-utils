@@ -794,7 +794,7 @@ public class AKJson
         //-----------------------------------------
         if (type == typeof(string))
         {
-            return source as string;
+            return Convert.ToString(source);
         }
         //-----------------------------------------
         if (type == typeof(bool))
