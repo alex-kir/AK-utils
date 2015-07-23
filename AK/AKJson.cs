@@ -328,6 +328,18 @@ public class AKJson
         }
     }
 
+    public static object DecodeOrNull(string json)
+    {
+        try
+        {
+            return new AKJson().DecodeJson(json);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public static T TransformObject<T>(object source)
     {
         return (T)TransformObject(source, typeof(T));
