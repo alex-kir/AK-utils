@@ -23,7 +23,7 @@
 //  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 //  THE SOFTWARE.
 //
-
+#define PCL
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -41,7 +41,6 @@ public class AKJson
 {
     public class Serializable : Attribute
     {
-        public string Name;
     }
 
     private const int TOKEN_NONE = 0;
@@ -80,26 +79,25 @@ public class AKJson
             return null;
 
         //-----------------------------------------
-        object[] typeAttributes = source.GetType().GetCustomAttributes(typeof(AKJson.Serializable), true);
-        if (typeAttributes.Length > 0)
+        if (source.GetType().HasCustomAttribute(typeof(AKJson.Serializable)))
         {
             var ret = new Dictionary<string, object>();
 
             // --- Scan Properties ---
-            foreach (var property in source.GetType().GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.GetProperty | BindingFlags.SetProperty))
+            foreach (var property in source.GetType().GetRuntimeProperties())
             {
                 var propertyAttributes = property.GetCustomAttributes(typeof(AKJson.Serializable), true);
-                if (propertyAttributes.Length > 0)
+                if (propertyAttributes.FirstOrDefault() != null)
                 {
                     ret[property.Name] = PrepeareForEncoding(property.GetValue(source, null));
                 }
             }
 
             // --- Scan Fields ---
-            foreach (var field in source.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+            foreach (var field in source.GetType().GetRuntimeFields())
             {
                 var fieldAttributes = field.GetCustomAttributes(typeof(AKJson.Serializable), true);
-                if (fieldAttributes.Length > 0)
+                if (fieldAttributes.FirstOrDefault() != null)
                 {
                     ret[field.Name] = PrepeareForEncoding(field.GetValue(source));
                 }
@@ -342,18 +340,14 @@ public class AKJson
         if (source == null)
             return source;
 
-        #if !NETFX_CORE
-        bool isGeneric = type.IsGenericType;
-        #else
         bool isGeneric = type.IsGenericType();
-        #endif
 
         //-----------------------------------------
         if (isGeneric && type.GetGenericTypeDefinition() == typeof(Dictionary<,>))
         {
             var dictionary = (source as IDictionary);
-            Type keyType = type.GetGenericArguments()[0];
-            Type valueType = type.GetGenericArguments()[1];
+            Type keyType = type.GetGenericTypeArgumentAt(0);
+            Type valueType = type.GetGenericTypeArgumentAt(1);
             var ret = (IDictionary)Activator.CreateInstance(type);
             foreach (var key in dictionary.Keys)
             {
@@ -362,16 +356,16 @@ public class AKJson
             return ret;
         }
 
-        if (type.GetCustomAttributes(typeof(AKJson.Serializable), true).Length > 0)
+        if (type.HasCustomAttribute(typeof(AKJson.Serializable)))
         {
             var dictionary = (source as IDictionary);
             var ret = Activator.CreateInstance(type);
 
             // --- Scan Properties ---
-            foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.GetProperty | BindingFlags.SetProperty))
+            foreach (var property in type.GetRuntimeProperties())
             {
                 var propertyAttributes = property.GetCustomAttributes(typeof(AKJson.Serializable), true);
-                if (propertyAttributes.Length > 0 && dictionary.Contains(property.Name))
+                if (propertyAttributes.FirstOrDefault() != null && dictionary.Contains(property.Name))
                 {
                     var val = TransformObject(dictionary[property.Name], property.PropertyType);
                     property.SetValue(ret, val, null);
@@ -379,10 +373,10 @@ public class AKJson
             }
 
             // --- Scan Fields ---
-            foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+            foreach (var field in type.GetRuntimeFields())
             {
                 var fieldAttributes = field.GetCustomAttributes(typeof(AKJson.Serializable), true);
-                if (fieldAttributes.Length > 0 && dictionary.Contains(field.Name))
+                if (fieldAttributes.FirstOrDefault() != null && dictionary.Contains(field.Name))
                 {
                     var val = TransformObject(dictionary[field.Name], field.FieldType);
                     field.SetValue(ret, val);
@@ -395,7 +389,7 @@ public class AKJson
         if (isGeneric && type.GetGenericTypeDefinition() == typeof(List<>))
         {
             var list = source as IEnumerable;
-            Type itemType = type.GetGenericArguments()[0];
+            Type itemType = type.GetGenericTypeArgumentAt(0);
             var ret = (IList)Activator.CreateInstance(type);
             foreach (object item in list)
             {
@@ -828,3 +822,46 @@ public class AKJson
 
 }
 
+public static class TypeExtentions
+{
+    #if !NETFX_CORE
+    public static bool IsGenericType(this Type self)
+    {
+        #if PCL
+        return self.GetTypeInfo().IsGenericType;
+        #else
+        return self.IsGenericType;
+        #endif
+    }
+    #endif
+
+    public static Type GetGenericTypeArgumentAt(this Type self, int index)
+    {
+        #if PCL
+        return self.GenericTypeArguments[index];
+        #else
+        return self.GetGenericArguments()[index];
+        #endif
+    }
+
+    public static bool HasCustomAttribute(this Type self, Type attributeType)
+    {
+        #if PCL
+        return self.GetTypeInfo().CustomAttributes.FirstOrDefault(it => it.AttributeType == attributeType) != null;
+        #else
+        return self.GetCustomAttributes(attributeType, true);
+        #endif
+    }
+
+    #if !PCL
+    public static IEnumerable<PropertyInfo> GetRuntimeProperties(this Type self)
+    {
+        return self.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.GetProperty | BindingFlags.SetProperty);
+    }
+    public static IEnumerable<FieldInfo> GetRuntimeFields(this Type self)
+    {
+        return self.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+    }
+    #endif
+
+}
