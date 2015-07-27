@@ -42,21 +42,7 @@ public class AKJson
     public class Serializable : Attribute
     {
     }
-
-    private const int TOKEN_NONE = 0;
-    private const int TOKEN_CURLY_OPEN = 1;
-    private const int TOKEN_CURLY_CLOSE = 2;
-    private const int TOKEN_SQUARED_OPEN = 3;
-    private const int TOKEN_SQUARED_CLOSE = 4;
-    private const int TOKEN_COLON = 5;
-    private const int TOKEN_COMMA = 6;
-    private const int TOKEN_STRING = 7;
-    private const int TOKEN_NUMBER = 8;
-    private const int TOKEN_TRUE = 9;
-    private const int TOKEN_FALSE = 10;
-    private const int TOKEN_NULL = 11;
-
-    private const int BUILDER_CAPACITY = 2000;
+    char[] unicodeCharArray = new char[4];
 
     #region Encoding
 
@@ -68,7 +54,7 @@ public class AKJson
 
     private string EncodeJson(object json)
     {
-        StringBuilder builder = new StringBuilder(BUILDER_CAPACITY);
+        StringBuilder builder = new StringBuilder();
         bool success = EncodeValue(json, builder);
         return (success ? builder.ToString() : null);
     }
@@ -302,43 +288,6 @@ public class AKJson
 
     #region Decoding
 
-    public static object Decode(string json)
-    {
-        return new AKJson().DecodeJson(json);
-    }
-
-    public static T Decode<T>(string json) where T : class
-    {
-        object obj = new AKJson().DecodeJson(json);
-        return (T)TransformObject(obj, typeof(T));
-    }
-
-    public static T DecodeOrNull<T>(string json) where T : class
-    {
-        try
-        {
-            object obj = new AKJson().DecodeJson(json);
-            if (obj == null)
-                return null;
-            return (T)TransformObject(obj, typeof(T));
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    public static object DecodeOrNull(string json)
-    {
-        try
-        {
-            return new AKJson().DecodeJson(json);
-        }
-        catch
-        {
-            return null;
-        }
-    }
 
     public static T TransformObject<T>(object source)
     {
@@ -455,6 +404,45 @@ public class AKJson
         throw new ArgumentException(string.Format("No ways found to transfom object from '{0}' type  to '{1}' type.", source.GetType().Name, type.Name));
     }
 
+    public static object Decode(string json)
+    {
+        return new AKJson().DecodeJson(json);
+    }
+
+    public static T Decode<T>(string json) where T : class
+    {
+        object obj = new AKJson().DecodeJson(json);
+        return (T)TransformObject(obj, typeof(T));
+    }
+
+    public static T DecodeOrNull<T>(string json) where T : class
+    {
+        try
+        {
+            object obj = new AKJson().DecodeJson(json);
+            if (obj == null)
+                return null;
+            return (T)TransformObject(obj, typeof(T));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public static object DecodeOrNull(string json)
+    {
+        try
+        {
+            return new AKJson().DecodeJson(json);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+
     private object DecodeJson(string json)
     {
         if (string.IsNullOrEmpty(json))
@@ -465,93 +453,68 @@ public class AKJson
             return null;
 
         int index = 0;
-        bool success = true;
-        object value = DecodeValue(charArray, ref index, ref success);
-        if (!success)
-            throw new Exception("Decode failed");
-        return value;
+        return DecodeValue(charArray, ref index);
     }
 
-    private object DecodeValue(char[] json, ref int index, ref bool success)
+    private object DecodeValue(char[] json, ref int index)
     {
-        switch (LookAhead(json, index))
-        {
-            case AKJson.TOKEN_STRING:
-                return DecodeString(json, ref index);
-            case AKJson.TOKEN_NUMBER:
-                return DecodeNumber(json, ref index);
-            case AKJson.TOKEN_CURLY_OPEN:
-                return DecodeObject(json, ref index);
-            case AKJson.TOKEN_SQUARED_OPEN:
-                return DecodeArray(json, ref index);
-            case AKJson.TOKEN_TRUE:
-                NextToken(json, ref index);
-                return Boolean.Parse("TRUE");
-            case AKJson.TOKEN_FALSE:
-                NextToken(json, ref index);
-                return Boolean.Parse("FALSE");
-            case AKJson.TOKEN_NULL:
-                NextToken(json, ref index);
-                return null;
-            case AKJson.TOKEN_NONE:
-                break;
-        }
+        EatWhitespace(json, ref index);
 
-        success = false;
-        return null;
+        var ch = json[index];
+        if (ch == '"')
+            return DecodeString(json, ref index);
+        if (ch == '{')
+            return DecodeObject(json, ref index);
+        if (ch == '[')
+            return DecodeArray(json, ref index);
+        if (ch == 't') {
+            Eat(json, ref index, 't', 'r', 'u', 'e');
+            return true;
+        }
+        if (ch == 'f') {
+            Eat(json, ref index, 'f', 'a', 'l', 's', 'e');
+            return false;
+        }
+        if (ch == 'n') {
+            Eat(json, ref index, 'n', 'u', 'l', 'l');
+            return null;
+        }
+        if ("0123456789".IndexOf(ch) != -1)
+            return DecodeNumber(json, ref index);
+
+        throw new Exception();
     }
 
     private Dictionary<object, object> DecodeObject(char[] json, ref int index)
     {
         Dictionary<object, object> dict = new Dictionary<object, object>();
-        int token;
 
         // {
-        NextToken(json, ref index);
+        Eat(json, ref index, '{');
 
-        bool done = false;
-        while (!done)
+        while (true)
         {
-            token = LookAhead(json, index);
-            if (token == AKJson.TOKEN_NONE)
+            EatWhitespace(json, ref index);
+            char ch = json[index];
+            if (ch == ',')
             {
-                return null;
+                Eat(json, ref index, ',');
             }
-            else if (token == AKJson.TOKEN_COMMA)
+            else if (ch == '}')
             {
-                NextToken(json, ref index);
-            }
-            else if (token == AKJson.TOKEN_CURLY_CLOSE)
-            {
-                NextToken(json, ref index);
-                return dict;
+                Eat(json, ref index, '}');
+                break;
             }
             else
             {
-
-                // name
+                // key
                 string name = DecodeString(json, ref index);
-                if (name == null)
-                {
-                    return null;
-                }
 
                 // :
-                token = NextToken(json, ref index);
-                if (token != AKJson.TOKEN_COLON)
-                {
-                    return null;
-                }
+                Eat(json, ref index, ':');
 
                 // value
-                bool success = true;
-                object value = DecodeValue(json, ref index, ref success);
-                if (!success)
-                {
-                    return null;
-                }
-
-                dict[name] = value;
+                dict[name] = DecodeValue(json, ref index);
             }
         }
 
@@ -563,35 +526,24 @@ public class AKJson
         List<object> list = new List<object>();
 
         // [
-        NextToken(json, ref index);
+        Eat(json, ref index, '[');
 
-        bool done = false;
-        while (!done)
+        while (true)
         {
-            int token = LookAhead(json, index);
-            if (token == AKJson.TOKEN_NONE)
+            EatWhitespace(json, ref index);
+            int ch = json[index];
+            if (ch == ',')
             {
-                return null;
+                Eat(json, ref index, ',');
             }
-            else if (token == AKJson.TOKEN_COMMA)
+            else if (ch == ']')
             {
-                NextToken(json, ref index);
-            }
-            else if (token == AKJson.TOKEN_SQUARED_CLOSE)
-            {
-                NextToken(json, ref index);
+                Eat(json, ref index, ']');
                 break;
             }
             else
             {
-                bool success = true;
-                object value = DecodeValue(json, ref index, ref success);
-                if (!success)
-                {
-                    return null;
-                }
-
-                list.Add(value);
+                list.Add(DecodeValue(json, ref index));
             }
         }
 
@@ -600,36 +552,20 @@ public class AKJson
 
     private string DecodeString(char[] json, ref int index)
     {
-        StringBuilder s = new StringBuilder(BUILDER_CAPACITY);
-        char c;
-
-        EatWhitespace(json, ref index);
+        StringBuilder s = new StringBuilder();
 
         // "
-        c = json[index++];
+        Eat(json, ref index, '"');
 
-        bool complete = false;
-        while (!complete)
+        while (true)
         {
-
-            if (index == json.Length)
-            {
-                break;
-            }
-
-            c = json[index++];
+            char c = json[index++];
             if (c == '"')
             {
-                complete = true;
                 break;
             }
             else if (c == '\\')
             {
-
-                if (index == json.Length)
-                {
-                    break;
-                }
                 c = json[index++];
                 if (c == '"')
                 {
@@ -665,36 +601,17 @@ public class AKJson
                 }
                 else if (c == 'u')
                 {
-                    int remainingLength = json.Length - index;
-                    if (remainingLength >= 4)
-                    {
-                        // fetch the next 4 chars
-                        char[] unicodeCharArray = new char[4];
-                        Array.Copy(json, index, unicodeCharArray, 0, 4);
-                        // parse the 32 bit hex into an integer codepoint
-                        uint codePoint = UInt32.Parse(new string(unicodeCharArray), NumberStyles.HexNumber);
-                        // convert the integer codepoint to a unicode char and add to string
-                        s.Append(Char.ConvertFromUtf32((int)codePoint));
-                        // skip 4 chars
-                        index += 4;
-                    }
-                    else
-                    {
-                        break;
-                    }
+                    Array.Copy(json, index, unicodeCharArray, 0, 4);
+                    uint codePoint = UInt32.Parse(new string(unicodeCharArray), NumberStyles.HexNumber);
+                    s.Append(Char.ConvertFromUtf32((int)codePoint));
+                    // skip 4 chars
+                    index += 4;
                 }
-
             }
             else
             {
                 s.Append(c);
             }
-
-        }
-
-        if (!complete)
-        {
-            return null;
         }
 
         return s.ToString();
@@ -726,6 +643,13 @@ public class AKJson
         return lastIndex - 1;
     }
 
+    private void Eat(char[] json, ref int index, params char[]chars)
+    {
+        for (int i = 0; i < chars.Length; i++,index++)
+            if (json[index] != chars[i])
+                throw new Exception();
+    }
+
     private void EatWhitespace(char[] json, ref int index)
     {
         for (; index < json.Length; index++)
@@ -735,99 +659,6 @@ public class AKJson
                 break;
             }
         }
-    }
-
-    private int LookAhead(char[] json, int index)
-    {
-        int saveIndex = index;
-        return NextToken(json, ref saveIndex);
-    }
-
-    private int NextToken(char[] json, ref int index)
-    {
-        EatWhitespace(json, ref index);
-
-        if (index == json.Length)
-        {
-            return AKJson.TOKEN_NONE;
-        }
-
-        char c = json[index];
-        index++;
-        switch (c)
-        {
-            case '{':
-                return AKJson.TOKEN_CURLY_OPEN;
-            case '}':
-                return AKJson.TOKEN_CURLY_CLOSE;
-            case '[':
-                return AKJson.TOKEN_SQUARED_OPEN;
-            case ']':
-                return AKJson.TOKEN_SQUARED_CLOSE;
-            case ',':
-                return AKJson.TOKEN_COMMA;
-            case '"':
-                return AKJson.TOKEN_STRING;
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            case '8':
-            case '9':
-            case '-':
-                return AKJson.TOKEN_NUMBER;
-            case ':':
-                return AKJson.TOKEN_COLON;
-        }
-        index--;
-
-        int remainingLength = json.Length - index;
-
-        // false
-        if (remainingLength >= 5)
-        {
-            if (json[index] == 'f' &&
-                json[index + 1] == 'a' &&
-                json[index + 2] == 'l' &&
-                json[index + 3] == 's' &&
-                json[index + 4] == 'e')
-            {
-                index += 5;
-                return AKJson.TOKEN_FALSE;
-            }
-        }
-
-        // true
-        if (remainingLength >= 4)
-        {
-            if (json[index] == 't' &&
-                json[index + 1] == 'r' &&
-                json[index + 2] == 'u' &&
-                json[index + 3] == 'e')
-            {
-                index += 4;
-                return AKJson.TOKEN_TRUE;
-            }
-        }
-
-        // null
-        if (remainingLength >= 4)
-        {
-            if (json[index] == 'n' &&
-                json[index + 1] == 'u' &&
-                json[index + 2] == 'l' &&
-                json[index + 3] == 'l')
-            {
-                index += 4;
-                return AKJson.TOKEN_NULL;
-            }
-        }
-
-        return AKJson.TOKEN_NONE;
     }
 
     #endregion
