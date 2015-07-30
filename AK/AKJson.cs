@@ -692,7 +692,7 @@ public static class TypeExtentions
         #if PCL
         return self.GetTypeInfo().CustomAttributes.FirstOrDefault(it => it.AttributeType == attributeType) != null;
         #else
-        return self.GetCustomAttributes(attributeType, true);
+        return self.GetCustomAttributes(attributeType, true).Any();
         #endif
     }
 
