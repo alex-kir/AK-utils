@@ -8,9 +8,11 @@
 #define AKSQLITE_XAMARIN_FORMS_IOS
 #elif _PLATFORM_ANDROID_
 #define AKSQLITE_XAMARIN_FORMS_ANDROID
+#elif WINDOWS_PHONE
 #else
 //#define AKSQLITE_COMMUNITY_CSHARP_SQLITE
-#define AKSQLITE_WINDOWS_FRAMEWORK_20
+//#define AKSQLITE_WINDOWS_FRAMEWORK_20
+#define AKSQLITE_SQLITE_NET
 #endif
 
 
@@ -33,13 +35,23 @@ using Community.CsharpSqlite;
 using Sqlite_connection = Community.CsharpSqlite.Sqlite3.sqlite3;
 using Sqlite_statement = Community.CsharpSqlite.Sqlite3.Vdbe;
 
+#elif WINDOWS_PHONE
+
+using Sqlite;
+using Sqlite_connection = Sqlite.Database;
+using Sqlite_statement = Sqlite.Statement;
+
 #elif AKSQLITE_WINDOWS_FRAMEWORK_20
 
 using System.Data.SQLite;
 
+#elif AKSQLITE_SQLITE_NET
+
+using SQLite.Net;
+
 #endif
 
-partial class AKSqlite : IDisposable
+public partial class AKSqlite : IDisposable
 {
 
 #if AKSQLITE_UNITY_IOS_DEVICE
@@ -296,11 +308,11 @@ partial class AKSqlite : IDisposable
         }
     }
 
-    public AKSqlite(string filename = null)
-    {
-        if (filename != null)
-            Connect(filename);
-    }
+    //public AKSqlite(string filename = null)
+    //{
+    //    if (filename != null)
+    //        Connect(filename);
+    //}
 
     public void CreateTable(string table_, string[] keys, string[] fields)
     {
@@ -368,13 +380,52 @@ partial class AKSqlite : IDisposable
 
 }
 
-#if AKSQLITE_WINDOWS_FRAMEWORK_20
 
-partial class AKSqlite : IDisposable
+#if AKSQLITE_SQLITE_NET
+
+public partial class AKSqlite : IDisposable
 {
     private SQLiteConnection sqlite = null;
 
-    private void Connect(string filename)
+    public AKSqlite(string filename)
+    {
+        var connectionString = "Data Source=\"" + filename + "\"";
+        sqlite = new SQLiteConnection(null, filename);
+    }
+
+    public ExecuteResult<Dictionary<string, object>> Execute(string query, params object[] args)
+    {
+        var command = sqlite.CreateCommand(query, args);
+        var result = command.ExecuteDeferredQuery<Dictionary<string, object>>();
+
+        var enumerator = result.GetEnumerator();
+
+        return new ExecuteResult<Dictionary<string, object>>(() =>
+        {
+            if (!enumerator.MoveNext())
+                return null;
+            return enumerator.Current;
+        }, () => { enumerator.Dispose(); });
+    }
+
+    public void Dispose()
+    {
+        if (sqlite != null)
+        {
+            sqlite.Dispose();
+            sqlite = null;
+        }
+    }
+
+}
+
+#elif AKSQLITE_WINDOWS_FRAMEWORK_20
+
+public partial class AKSqlite : IDisposable
+{
+    private SQLiteConnection sqlite = null;
+
+    public AKSqlite(string filename)
     {
         var connectionString = "Data Source=\"" + filename + "\"";
         sqlite = new SQLiteConnection(connectionString);
@@ -414,6 +465,176 @@ partial class AKSqlite : IDisposable
 
 }
 
+//#elif WINDOWS_PHONE
+
+//public partial class AKSqlite : IDisposable
+//{
+//    private Sqlite.Sqlite3 sqlite = null;
+
+//    public AKSqlite(string filename)
+//    {
+//        var connectionString = "Data Source=\"" + filename + "\"";
+//        sqlite = Sqlite3.sqlite3_open( (connectionString);
+//        sqlite.Open();
+//    }
+
+//    public ExecuteResult<Dictionary<string, object>> Execute(string query, params object[] args)
+//    {
+//        //var command = new SQLiteCommand(query, sqlite);
+
+//        //SQLiteParameter[] parameters = new SQLiteParameter[args.Length];
+//        //for (int i = 0; i < args.Length; i++)
+//        //{
+//        //    parameters[i] = new SQLiteParameter();
+//        //    parameters[i].Value = args[i];
+//        //}
+//        //command.Parameters.AddRange(parameters);
+
+//        //var reader = command.ExecuteReader();
+//        //int n = reader.FieldCount;
+//        //return new ExecuteResult<Dictionary<string, object>>(() =>
+//        //{
+//        //    if (!reader.Read())
+//        //        return null;
+//        //    return Enumerable.Range(0, n).ToDictionary(it => reader.GetName(it), it => reader.GetValue(it));
+//        //}, () => { reader.Dispose(); });
+//        return null;
+//    }
+
+//    public void Dispose()
+//    {
+//        //if (sqlite != null)
+//        //{
+//        //    sqlite.Dispose();
+//        //    sqlite = null;
+//        //}
+//    }
+
+//}
+
+#elif WINDOWS_PHONE
+
+partial class AKSqlite : IDisposable
+{
+    private Sqlite_connection sqlite = default(Sqlite_connection);
+    private readonly object _sync = new object();
+
+    public const int SQLITE_OK = 0;
+    public const byte SQLITE_BLOB = 4;
+    public const int SQLITE_ROW = 100;
+    public const int SQLITE_DONE = 101;
+
+    public AKSqlite(string filename)
+    {
+        if (!File.Exists(filename))
+        {
+            throw new FileNotFoundException("DatabaseContext.Connect()", filename);
+        }
+
+        int errCode = Sqlite3.sqlite3_open(filename, out sqlite);
+        if (errCode != SQLITE_OK)
+        {
+            throw new Exception("Sqlite3.sqlite3_open returns error " + errCode + ", " + Sqlite3ErrorCodeToString(errCode) + ", " + filename);
+        }
+    }
+
+    private string Sqlite3ErrorCodeToString(int errCode)
+    {
+        if (errCode == 1) return "SQLITE_ERROR";
+        if (errCode == 2) return "SQLITE_INTERNAL";
+        if (errCode == 3) return "SQLITE_PERM";
+        if (errCode == 4) return "SQLITE_ABORT";
+        if (errCode == 5) return "SQLITE_BUSY";
+        if (errCode == 6) return "SQLITE_LOCKED";
+        if (errCode == 7) return "SQLITE_NOMEM";
+        if (errCode == 8) return "SQLITE_READONLY";
+        if (errCode == 9) return "SQLITE_INTERRUPT";
+        if (errCode == 10) return "SQLITE_IOERR";
+        if (errCode == 11) return "SQLITE_CORRUPT";
+        if (errCode == 12) return "SQLITE_NOTFOUND";
+        if (errCode == 13) return "SQLITE_FULL";
+        if (errCode == 14) return "SQLITE_CANTOPEN";
+        if (errCode == 15) return "SQLITE_PROTOCOL";
+        if (errCode == 16) return "SQLITE_EMPTY";
+        if (errCode == 17) return "SQLITE_SCHEMA";
+        if (errCode == 18) return "SQLITE_TOOBIG";
+        if (errCode == 19) return "SQLITE_CONSTRAINT";
+        if (errCode == 20) return "SQLITE_MISMATCH";
+        if (errCode == 21) return "SQLITE_MISUSE";
+        if (errCode == 22) return "SQLITE_NOLFS";
+        if (errCode == 23) return "SQLITE_AUTH";
+        if (errCode == 24) return "SQLITE_FORMAT";
+        if (errCode == 25) return "SQLITE_RANGE";
+        if (errCode == 26) return "SQLITE_NOTADB";
+        if (errCode == 27) return "SQLITE_NOTICE";
+        if (errCode == 28) return "SQLITE_WARNING";
+        if (errCode == SQLITE_ROW) return "SQLITE_ROW";
+        if (errCode == SQLITE_DONE) return "SQLITE_DONE";
+        return "<Unknown>";
+    }
+
+    public ExecuteResult<Dictionary<string, object>> Execute(string query, params object[] args)
+    {
+        var statement = default(Sqlite_statement);
+
+        int errCode = Sqlite3.sqlite3_prepare_v2(sqlite, query, out statement);
+        if (errCode != SQLITE_OK)
+        {
+            Sqlite3.sqlite3_finalize(statement);
+            statement = default(Sqlite_statement);
+            throw new Exception("Sqlite3.sqlite3_prepare_v2 returns error " + Sqlite3ErrorCodeToString(errCode) + "; " + query);
+        }
+
+        int n = Sqlite3.sqlite3_column_count(statement);
+
+
+
+        return new ExecuteResult<Dictionary<string, object>>(() =>
+        {
+            lock (_sync)
+            {
+                if (statement == default(Sqlite_statement))
+                    return null;
+                if (Sqlite3.sqlite3_step(statement) != SQLITE_ROW)
+                    return null;
+
+                var row = new Dictionary<string, object>();
+                for (int i = 0; i < n; i++)
+                {
+                    var key = Sqlite3.sqlite3_column_name(statement, i);
+                    int type = Sqlite3.sqlite3_column_type(statement, i);
+                    if (type == SQLITE_BLOB)
+                    {
+                        row[key] = Sqlite3.sqlite3_column_blob(statement, i);
+                    }
+                    else
+                    {
+                        row[key] = Sqlite3.sqlite3_column_text(statement, i);
+                    }
+                }
+                return row;
+            }
+        }, () =>
+        {
+            if (statement != default(Sqlite_statement))
+            {
+                Sqlite3.sqlite3_finalize(statement);
+                statement = default(Sqlite_statement);
+            }
+        });
+    }
+
+    public void Dispose()
+    {
+        if (sqlite != default(Sqlite_connection))
+        {
+            Sqlite3.sqlite3_close(sqlite);
+            sqlite = default(Sqlite_connection);
+        }
+    }
+
+}
+
 #else
 
 partial class AKSqlite : IDisposable
@@ -422,7 +643,7 @@ partial class AKSqlite : IDisposable
     private readonly object _sync = new object();
 
 
-    private void Connect(string filename)
+    public AKSqlite(string filename)
     {
         if (!File.Exists(filename))
         {
