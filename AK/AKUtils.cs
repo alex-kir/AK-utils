@@ -7,6 +7,7 @@ using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Xamarin.Forms;
 
@@ -36,8 +37,8 @@ public static class AKUtils
         {
             task.Exception.LogException();
         }, TaskContinuationOptions.OnlyOnFaulted);
-        return self;
 #endif
+        return self;
     }
 
     public static Task LogException(this Task self)
@@ -47,9 +48,11 @@ public static class AKUtils
         {
             task.Exception.LogException();
         }, TaskContinuationOptions.OnlyOnFaulted);
-        return self;
 #endif
+        return self;
     }
+
+#if DEBUG
 
     private static MethodInfo _Mono_Android_Android_Util_Log_Debug_string_string = FindMethod("Mono.Android", "Android.Util", "Log", "Debug", typeof(string), typeof(string));
 
@@ -62,33 +65,44 @@ public static class AKUtils
     private static PropertyInfo _mscorlib_System_Threading_Thread_ManagedThreadId = FindProperty("mscorlib", "System.Threading", "Thread", "ManagedThreadId");
     private static PropertyInfo _mscorlib_System_Threading_Thread_Name = FindProperty("mscorlib", "System.Threading", "Thread", "Name");
 
+#endif
+
     private static void LogMessage(string tag, int stackIndex, string arguments, string message)
     {
 #if DEBUG
-        int baseStackIndex = Device.OnPlatform(1, 6, 3);
-        var frame = _mscorlib_System_Diagnostics_StackFrame_int_bool.Invoke(new object[] { baseStackIndex + stackIndex, true });
+        try
+        {
+            int baseStackIndex = Device.OnPlatform(1, 6, 3);
+            var frame = _mscorlib_System_Diagnostics_StackFrame_int_bool.Invoke(new object[] { baseStackIndex + stackIndex, true });
 
-        var thread = _mscorlib_System_Threading_Thread_CurrentThread.GetValue(null);
+            var thread = _mscorlib_System_Threading_Thread_CurrentThread.GetValue(null);
 
-        var managedThreadId = (int)_mscorlib_System_Threading_Thread_ManagedThreadId.GetValue(thread);
+            var managedThreadId = (int)_mscorlib_System_Threading_Thread_ManagedThreadId.GetValue(thread);
 
-        var threadName = _mscorlib_System_Threading_Thread_Name.GetValue(thread) as string;
-        var threadInfo = "<" + (managedThreadId).ToString("000") + (string.IsNullOrEmpty(threadName) ? "" : ("=" + threadName)) + ">";
-        var dateInfo = "[" + DateTime.Now.ToString("HH:mm:ss,fff") + "]";
-        var frameGetFileName = _mscorlib_System_Diagnostics_StackFrame_GetFileName.Invoke(frame, new object[] { });
-        var frameGetFileLineNumber = _mscorlib_System_Diagnostics_StackFrame_GetFileLineNumber.Invoke(frame, null);
-        var backrefInfo = new string(' ', 32) + " in " + frameGetFileName + ":" + frameGetFileLineNumber;
-        var frameMethodObj = _mscorlib_System_Diagnostics_StackFrame_GetMethod.Invoke(frame, null);
-        var frameMethod = frameMethodObj as MethodInfo;
-        var methodInfo = (frameMethod != null ? frameMethod.DeclaringType.Name + "." + frameMethod.Name : "?.?") + "(" + arguments + ")";
-        var msg = threadInfo + " " + dateInfo + " " + methodInfo + " " + message + " " + backrefInfo;
+            var threadName = "";
+            try { threadName = _mscorlib_System_Threading_Thread_Name.GetValue(thread) as string; } catch { }
+            var threadInfo = "<" + (managedThreadId).ToString("000") + (string.IsNullOrEmpty(threadName) ? "" : ("=" + threadName)) + ">";
+            var dateInfo = "[" + DateTime.Now.ToString("HH:mm:ss,fff") + "]";
+            var frameGetFileName = _mscorlib_System_Diagnostics_StackFrame_GetFileName.Invoke(frame, new object[] { });
+            var frameGetFileLineNumber = _mscorlib_System_Diagnostics_StackFrame_GetFileLineNumber.Invoke(frame, null);
+            var backrefInfo = new string(' ', 32) + " in " + frameGetFileName + ":" + frameGetFileLineNumber;
+            var frameMethodObj = _mscorlib_System_Diagnostics_StackFrame_GetMethod.Invoke(frame, null);
+            var frameMethod = frameMethodObj as MethodInfo;
+            var methodInfo = (frameMethod != null ? frameMethod.DeclaringType.Name + "." + frameMethod.Name : "?.?") + "(" + arguments + ")";
+            var msg = threadInfo + " " + dateInfo + " " + methodInfo + " " + message + " " + backrefInfo;
 
-        Device.OnPlatform(
-            () => System.Diagnostics.Debug.WriteLine(tag + msg),
-            () => _Mono_Android_Android_Util_Log_Debug_string_string.Invoke(null, new object[] { tag, msg }),
-            () => System.Diagnostics.Debug.WriteLine(tag + msg)
-        );
-        //#endif
+            Device.OnPlatform(
+                () => System.Diagnostics.Debug.WriteLine(tag + msg),
+                () => _Mono_Android_Android_Util_Log_Debug_string_string.Invoke(null, new object[] { tag, msg }),
+                () => System.Diagnostics.Debug.WriteLine(tag + msg)
+            );
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            System.Diagnostics.Debug.WriteLine(arguments);
+            System.Diagnostics.Debug.WriteLine(message);
+        }
 #endif
     }
 
@@ -200,20 +214,20 @@ public static class AKUtils
 
     #region System.Threading.Tasks
 
-    public static T RunWithProgress<T>(this T self, TaskScheduler uiScheduler, Action showDialog, Action hideDialog, Action<string> showError) where T : Task
+    public static T RunWithDialog<T>(this T self, TaskScheduler uiScheduler, Action showDialog, Action hideDialog, Action<string> showError) where T : Task
     {
-        var show = new Task(() =>
-        {
+        CancellationTokenSource cts = new CancellationTokenSource();
+        var token = cts.Token;
+        Task.Delay(500, token).ContinueWith(task => {
             showDialog();
-        });
-        show.Start(uiScheduler);
+            self.ContinueWith(t => {
+                hideDialog();
+            }, uiScheduler);
+        }, CancellationToken.None, TaskContinuationOptions.OnlyOnRanToCompletion, uiScheduler);
 
-        Task.WhenAll(new[] { self, show }).ContinueWith(task =>
-        {
-            //System.Threading.Thread.Sleep(3000);
-            hideDialog();
-            if (task.IsFaulted)
-            {
+        self.ContinueWith(task => {
+            cts.Cancel();
+            if (task.IsFaulted) {
                 task.Exception.LogException();
                 showError(task.Exception.ExtractMessage());
             }
@@ -517,6 +531,19 @@ public static class AKUtils
         {
             ex.LogException();
         }
+    }
+
+    public static T SafeCall<T>(T defolt, Func<T> action)
+    {
+        try
+        {
+            return action();
+        }
+        catch (Exception ex)
+        {
+            ex.LogException();
+        }
+        return defolt;
     }
 
     public static async Task<T> SafeCallAsync<T>(Func<Task<T>> action, T defolt)

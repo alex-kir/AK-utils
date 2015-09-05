@@ -308,12 +308,6 @@ public partial class AKSqlite : IDisposable
         }
     }
 
-    //public AKSqlite(string filename = null)
-    //{
-    //    if (filename != null)
-    //        Connect(filename);
-    //}
-
     public void CreateTable(string table_, string[] keys, string[] fields)
     {
         var ff = string.Join(", ", keys.Concat(fields).Select(it => "`" + it + "`"));
@@ -464,53 +458,6 @@ public partial class AKSqlite : IDisposable
     }
 
 }
-
-//#elif WINDOWS_PHONE
-
-//public partial class AKSqlite : IDisposable
-//{
-//    private Sqlite.Sqlite3 sqlite = null;
-
-//    public AKSqlite(string filename)
-//    {
-//        var connectionString = "Data Source=\"" + filename + "\"";
-//        sqlite = Sqlite3.sqlite3_open( (connectionString);
-//        sqlite.Open();
-//    }
-
-//    public ExecuteResult<Dictionary<string, object>> Execute(string query, params object[] args)
-//    {
-//        //var command = new SQLiteCommand(query, sqlite);
-
-//        //SQLiteParameter[] parameters = new SQLiteParameter[args.Length];
-//        //for (int i = 0; i < args.Length; i++)
-//        //{
-//        //    parameters[i] = new SQLiteParameter();
-//        //    parameters[i].Value = args[i];
-//        //}
-//        //command.Parameters.AddRange(parameters);
-
-//        //var reader = command.ExecuteReader();
-//        //int n = reader.FieldCount;
-//        //return new ExecuteResult<Dictionary<string, object>>(() =>
-//        //{
-//        //    if (!reader.Read())
-//        //        return null;
-//        //    return Enumerable.Range(0, n).ToDictionary(it => reader.GetName(it), it => reader.GetValue(it));
-//        //}, () => { reader.Dispose(); });
-//        return null;
-//    }
-
-//    public void Dispose()
-//    {
-//        //if (sqlite != null)
-//        //{
-//        //    sqlite.Dispose();
-//        //    sqlite = null;
-//        //}
-//    }
-
-//}
 
 #elif WINDOWS_PHONE
 
