@@ -128,7 +128,7 @@ public static class AKUtils
 
     public static string ExtractMessage(this Exception self)
     {
-        var ret = "Unknown error".T();
+        string ret = null;
         while (self != null)
         {
             ret = self.Message;
