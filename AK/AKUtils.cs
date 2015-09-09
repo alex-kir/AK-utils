@@ -64,6 +64,11 @@ public static class AKUtils
         return string.Join(separator, self.Select(it => it + ""));
     }
 
+    public static IOrderedEnumerable<T> OrderBy<T>(this IEnumerable<T> self)
+    {
+        return self.OrderBy(it => it);
+    }
+
     public static void ForEach<T>(this IEnumerable<T> self, Action<int, T> action)
     {
         int i = 0;
@@ -88,6 +93,27 @@ public static class AKUtils
         int i = pp.Length / 2;
         int j = (pp.Length - 1) - i;
         return (pp[i] + pp[j]) / 2;
+    }
+
+    #endregion
+
+    #region System.ComponentModel.INotifyPropertyChanged (ViewModel)
+
+    //Example:    
+    //class ViewModel : INotifyPropertyChanged {
+    //    public event PropertyChangedEventHandler PropertyChanged;
+    //    private bool isSelected;
+    //    public bool IsSelected { get { return isSelected; } set { AKUtils.Setter(ref isSelected, value, PropertyChanged, this, "IsSelected"); } }
+    //}
+    public static void Setter<T>(ref T field, T value, PropertyChangedEventHandler action, object sender, params string [] names)
+    {
+        if (!object.Equals(field, value))
+        {
+            field = value;
+            if (action != null)
+                foreach(var name in names)
+                    action(sender, new PropertyChangedEventArgs(name));
+        }
     }
 
     #endregion
@@ -185,6 +211,10 @@ public static class AKUtils
     public static Task<T> WithCancellableAwaiter<T>(this Task<T> task, CancellationToken token)
     {
         return task.ContinueWith(t => t.GetAwaiter().GetResult(), token);
+    }
+
+    public static void DoNotAwait(this Task task)
+    {
     }
 
     public class TaskSchedulerAwaiter : INotifyCompletion
@@ -650,20 +680,5 @@ public static class AKUtils
     }
 
     #endregion
-
-    #region WPF helpers
-
-    public static void Setter<T>(ref T field, T value, PropertyChangedEventHandler action, object sender, string name)
-    {
-        if (!object.Equals(field, value))
-        {
-            field = value;
-            if (action != null)
-                action(sender, new PropertyChangedEventArgs(name));
-        }
-    }
-
-    #endregion
-
 }
 
