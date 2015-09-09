@@ -14,98 +14,90 @@ using Xamarin.Forms;
 
 public static class AKUtils
 {
-    #region Debugging
+    #region System.Action, System.Func
 
-    public static void Trace(this object self, params object[] others)
+    public static void SafeCall(Action action)
     {
-#if DEBUG
-        LogMessage("#TRACE# ", 2, new[] { self }.Concat(others).JoinStrings(","), null);
-#endif
-    }
-
-    public static void Trace(params object[] others)
-    {
-#if DEBUG
-        LogMessage("#TRACE# ", 2, others.JoinStrings(","), null);
-#endif
-    }
-
-    public static Task<T> LogException<T>(this Task<T> self)
-    {
-#if DEBUG
-        self.ContinueWith(task =>
-        {
-            task.Exception.LogException();
-        }, TaskContinuationOptions.OnlyOnFaulted);
-#endif
-        return self;
-    }
-
-    public static Task LogException(this Task self)
-    {
-#if DEBUG
-        self.ContinueWith(task =>
-        {
-            task.Exception.LogException();
-        }, TaskContinuationOptions.OnlyOnFaulted);
-#endif
-        return self;
-    }
-
-#if DEBUG
-
-    private static MethodInfo _Mono_Android_Android_Util_Log_Debug_string_string = FindMethod("Mono.Android", "Android.Util", "Log", "Debug", typeof(string), typeof(string));
-
-    private static ConstructorInfo _mscorlib_System_Diagnostics_StackFrame_int_bool = FindConstructor("mscorlib", "System.Diagnostics", "StackFrame", typeof(int), typeof(bool));
-    private static MethodInfo _mscorlib_System_Diagnostics_StackFrame_GetFileName = FindMethod("mscorlib", "System.Diagnostics", "StackFrame", "GetFileName");
-    private static MethodInfo _mscorlib_System_Diagnostics_StackFrame_GetFileLineNumber = FindMethod("mscorlib", "System.Diagnostics", "StackFrame", "GetFileLineNumber");
-    private static MethodInfo _mscorlib_System_Diagnostics_StackFrame_GetMethod = FindMethod("mscorlib", "System.Diagnostics", "StackFrame", "GetMethod");
-
-    private static PropertyInfo _mscorlib_System_Threading_Thread_CurrentThread = FindProperty("mscorlib", "System.Threading", "Thread", "CurrentThread");
-    private static PropertyInfo _mscorlib_System_Threading_Thread_ManagedThreadId = FindProperty("mscorlib", "System.Threading", "Thread", "ManagedThreadId");
-    private static PropertyInfo _mscorlib_System_Threading_Thread_Name = FindProperty("mscorlib", "System.Threading", "Thread", "Name");
-
-#endif
-
-    private static void LogMessage(string tag, int stackIndex, string arguments, string message)
-    {
-#if DEBUG
         try
         {
-            int baseStackIndex = Device.OnPlatform(1, 6, 3);
-            var frame = _mscorlib_System_Diagnostics_StackFrame_int_bool.Invoke(new object[] { baseStackIndex + stackIndex, true });
-
-            var thread = _mscorlib_System_Threading_Thread_CurrentThread.GetValue(null);
-
-            var managedThreadId = (int)_mscorlib_System_Threading_Thread_ManagedThreadId.GetValue(thread);
-
-            var threadName = "";
-            try { threadName = _mscorlib_System_Threading_Thread_Name.GetValue(thread) as string; } catch { }
-            var threadInfo = "<" + (managedThreadId).ToString("000") + (string.IsNullOrEmpty(threadName) ? "" : ("=" + threadName)) + ">";
-            var dateInfo = "[" + DateTime.Now.ToString("HH:mm:ss,fff") + "]";
-            var frameGetFileName = _mscorlib_System_Diagnostics_StackFrame_GetFileName.Invoke(frame, new object[] { });
-            var frameGetFileLineNumber = _mscorlib_System_Diagnostics_StackFrame_GetFileLineNumber.Invoke(frame, null);
-            var backrefInfo = new string(' ', 32) + " in " + frameGetFileName + ":" + frameGetFileLineNumber;
-            var frameMethodObj = _mscorlib_System_Diagnostics_StackFrame_GetMethod.Invoke(frame, null);
-            var frameMethod = frameMethodObj as MethodInfo;
-            var methodInfo = (frameMethod != null ? frameMethod.DeclaringType.Name + "." + frameMethod.Name : "?.?") + "(" + arguments + ")";
-            var msg = threadInfo + " " + dateInfo + " " + methodInfo + " " + message + " " + backrefInfo;
-
-            Device.OnPlatform(
-                () => System.Diagnostics.Debug.WriteLine(tag + msg),
-                () => _Mono_Android_Android_Util_Log_Debug_string_string.Invoke(null, new object[] { tag, msg }),
-                () => System.Diagnostics.Debug.WriteLine(tag + msg)
-            );
+            action();
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine(ex);
-            System.Diagnostics.Debug.WriteLine(arguments);
-            System.Diagnostics.Debug.WriteLine(message);
+            ex.LogException();
         }
-#endif
     }
 
+    public static T SafeCall<T>(T defolt, Func<T> action)
+    {
+        try
+        {
+            return action();
+        }
+        catch (Exception ex)
+        {
+            ex.LogException();
+        }
+        return defolt;
+    }
+
+    public static async Task<T> SafeCallAsync<T>(Func<Task<T>> action, T defolt)
+    {
+        try
+        {
+            return await action();
+        }
+        catch (Exception ex)
+        {
+            ex.LogException();
+            return defolt;
+        }
+    }
+
+    #endregion
+
+    #region System.Collections.IEnumerable<T>
+
+    public static string JoinStrings<T>(this IEnumerable<T> self, string separator = "")
+    {
+        return string.Join(separator, self.Select(it => it + ""));
+    }
+
+    public static void ForEach<T>(this IEnumerable<T> self, Action<int, T> action)
+    {
+        int i = 0;
+        foreach (var item in self)
+        {
+            action(i, item);
+            i++;
+        }
+    }
+
+    public static void ForEach<T>(this IEnumerable<T> self, Action<T> action)
+    {
+        foreach (var item in self)
+        {
+            action(item);
+        }
+    }
+
+    public static int Median(this IEnumerable<int> self)
+    {
+        var pp = self.OrderBy(it => it).ToArray();
+        int i = pp.Length / 2;
+        int j = (pp.Length - 1) - i;
+        return (pp[i] + pp[j]) / 2;
+    }
+
+    #endregion
+
+    #region System.DateTime
+
+    public static DateTime Truncate(this DateTime dateTime, TimeSpan timeSpan)
+    {
+        if (timeSpan == TimeSpan.Zero) return dateTime; // Or could throw an ArgumentException
+        return dateTime.AddTicks(-(dateTime.Ticks % timeSpan.Ticks));
+    }
 
     #endregion
 
@@ -135,57 +127,6 @@ public static class AKUtils
             self = self.InnerException;
         }
         return ret;
-    }
-
-    #endregion
-
-    #region IEnumerable<T>
-
-    public static string JoinStrings<T>(this IEnumerable<T> self, string separator = "")
-    {
-        return string.Join(separator, self.Select(it => it + ""));
-    }
-
-    public static void ForEach<T>(this IEnumerable<T> self, Action<int, T> action)
-    {
-        int i = 0;
-        foreach (var item in self)
-        {
-            action(i, item);
-            i++;
-        }
-    }
-
-    public static void ForEach<T>(this IEnumerable<T> self, Action<T> action)
-    {
-        foreach (var item in self)
-        {
-            action(item);
-        }
-    }
-
-    #endregion
-
-    #region System.DateTime
-
-    public static DateTime Truncate(this DateTime dateTime, TimeSpan timeSpan)
-    {
-        if (timeSpan == TimeSpan.Zero) return dateTime; // Or could throw an ArgumentException
-        return dateTime.AddTicks(-(dateTime.Ticks % timeSpan.Ticks));
-    }
-
-    #endregion
-
-    #region WPF helpers
-
-    public static void Setter<T>(ref T field, T value, PropertyChangedEventHandler action, object sender, string name)
-    {
-        if (!object.Equals(field, value))
-        {
-            field = value;
-            if (action != null)
-                action(sender, new PropertyChangedEventArgs(name));
-        }
     }
 
     #endregion
@@ -329,6 +270,129 @@ public static class AKUtils
         foreach (var child in children)
             self.Children.Add(child.view, child.x, child.y, child.width, child.height);
         return self;
+    }
+
+    #endregion
+
+    #region Debugging
+
+    public static void Trace(this object self, params object[] others)
+    {
+#if DEBUG
+        LogMessage("#TRACE# ", 2, new[] { self }.Concat(others).JoinStrings(","), null);
+#endif
+    }
+
+    public static void Trace(params object[] others)
+    {
+#if DEBUG
+        LogMessage("#TRACE# ", 2, others.JoinStrings(","), null);
+#endif
+    }
+
+    public static Task<T> LogException<T>(this Task<T> self)
+    {
+#if DEBUG
+        self.ContinueWith(task =>
+            {
+                task.Exception.LogException();
+            }, TaskContinuationOptions.OnlyOnFaulted);
+#endif
+        return self;
+    }
+
+    public static Task LogException(this Task self)
+    {
+#if DEBUG
+        self.ContinueWith(task =>
+            {
+                task.Exception.LogException();
+            }, TaskContinuationOptions.OnlyOnFaulted);
+#endif
+        return self;
+    }
+
+#if DEBUG
+
+    private static MethodInfo _Mono_Android_Android_Util_Log_Debug_string_string = FindMethod("Mono.Android", "Android.Util", "Log", "Debug", typeof(string), typeof(string));
+
+    private static ConstructorInfo _mscorlib_System_Diagnostics_StackFrame_int_bool = FindConstructor("mscorlib", "System.Diagnostics", "StackFrame", typeof(int), typeof(bool));
+    private static MethodInfo _mscorlib_System_Diagnostics_StackFrame_GetFileName = FindMethod("mscorlib", "System.Diagnostics", "StackFrame", "GetFileName");
+    private static MethodInfo _mscorlib_System_Diagnostics_StackFrame_GetFileLineNumber = FindMethod("mscorlib", "System.Diagnostics", "StackFrame", "GetFileLineNumber");
+    private static MethodInfo _mscorlib_System_Diagnostics_StackFrame_GetMethod = FindMethod("mscorlib", "System.Diagnostics", "StackFrame", "GetMethod");
+
+    private static PropertyInfo _mscorlib_System_Threading_Thread_CurrentThread = FindProperty("mscorlib", "System.Threading", "Thread", "CurrentThread");
+    private static PropertyInfo _mscorlib_System_Threading_Thread_ManagedThreadId = FindProperty("mscorlib", "System.Threading", "Thread", "ManagedThreadId");
+    private static PropertyInfo _mscorlib_System_Threading_Thread_Name = FindProperty("mscorlib", "System.Threading", "Thread", "Name");
+
+#endif
+
+    private static void LogMessage(string tag, int stackIndex, string arguments, string message)
+    {
+#if DEBUG
+        try
+        {
+            int baseStackIndex = Device.OnPlatform(1, 6, 3);
+            var frame = _mscorlib_System_Diagnostics_StackFrame_int_bool.Invoke(new object[] { baseStackIndex + stackIndex, true });
+
+            var thread = _mscorlib_System_Threading_Thread_CurrentThread.GetValue(null);
+
+            var managedThreadId = (int)_mscorlib_System_Threading_Thread_ManagedThreadId.GetValue(thread);
+
+            var threadName = "";
+            try { threadName = _mscorlib_System_Threading_Thread_Name.GetValue(thread) as string; } catch { }
+            var threadInfo = "<" + (managedThreadId).ToString("000") + (string.IsNullOrEmpty(threadName) ? "" : ("=" + threadName)) + ">";
+            var dateInfo = "[" + DateTime.Now.ToString("HH:mm:ss,fff") + "]";
+            var frameGetFileName = _mscorlib_System_Diagnostics_StackFrame_GetFileName.Invoke(frame, new object[] { });
+            var frameGetFileLineNumber = _mscorlib_System_Diagnostics_StackFrame_GetFileLineNumber.Invoke(frame, null);
+            var backrefInfo = new string(' ', 32) + " in " + frameGetFileName + ":" + frameGetFileLineNumber;
+            var frameMethodObj = _mscorlib_System_Diagnostics_StackFrame_GetMethod.Invoke(frame, null);
+            var frameMethod = frameMethodObj as MethodInfo;
+            var methodInfo = (frameMethod != null ? frameMethod.DeclaringType.Name + "." + frameMethod.Name : "?.?") + "(" + arguments + ")";
+            var msg = threadInfo + " " + dateInfo + " " + methodInfo + " " + message + " " + backrefInfo;
+
+            Device.OnPlatform(
+                () => System.Diagnostics.Debug.WriteLine(tag + msg),
+                () => _Mono_Android_Android_Util_Log_Debug_string_string.Invoke(null, new object[] { tag, msg }),
+                () => System.Diagnostics.Debug.WriteLine(tag + msg)
+            );
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            System.Diagnostics.Debug.WriteLine(arguments);
+            System.Diagnostics.Debug.WriteLine(message);
+        }
+#endif
+    }
+
+
+    #endregion
+
+    #region Math
+
+    public static class Math
+    {
+        public static double Lerp(double p1, double p2, double t01)
+        {
+            return p1 + (p2 - p1) * t01;
+        }
+
+        public static float Lerp(float p1, float p2, float t01)
+        {
+            return p1 + (p2 - p1) * t01;
+        }
+
+        public static double Lerp(double y1, double y2, double x1, double x2, double x)
+        {
+            return y1 + (y2 - y1) * ((x - x1) / (x2 - x1));
+        }
+
+        public static float Lerp(float y1, float y2, float x1, float x2, float x)
+        {
+            return y1 + (y2 - y1) * ((x - x1) / (x2 - x1));
+        }
+
     }
 
     #endregion
@@ -519,48 +583,6 @@ public static class AKUtils
 
     #endregion
 
-    #region System.Action, System.Func
-
-    public static void SafeCall(Action action)
-    {
-        try
-        {
-            action();
-        }
-        catch (Exception ex)
-        {
-            ex.LogException();
-        }
-    }
-
-    public static T SafeCall<T>(T defolt, Func<T> action)
-    {
-        try
-        {
-            return action();
-        }
-        catch (Exception ex)
-        {
-            ex.LogException();
-        }
-        return defolt;
-    }
-
-    public static async Task<T> SafeCallAsync<T>(Func<Task<T>> action, T defolt)
-    {
-        try
-        {
-            return await action();
-        }
-        catch (Exception ex)
-        {
-            ex.LogException();
-            return defolt;
-        }
-    }
-
-    #endregion
-
     #region Resources
 
     public static ImageSource CompleteImageSource(string resourceName)
@@ -570,8 +592,18 @@ public static class AKUtils
 
     public static string LoadRawString(string resourceName, string assemblyName = null)
     {
-        var assembly = typeof(AKUtils).GetTypeInfo().Assembly;
-        Stream stream = assembly.GetManifestResourceStream(assembly.GetName() + "." + resourceName);
+        Assembly assembly;
+        if (assemblyName == null) {
+            assembly = typeof(AKUtils).GetTypeInfo().Assembly;
+            var names = assembly.GetManifestResourceNames();
+            assemblyName = assembly.GetName().Name;
+        }
+        else
+        {
+            assembly = Assembly.Load(new AssemblyName(assemblyName));
+        }
+
+        Stream stream = assembly.GetManifestResourceStream(assemblyName + "." + resourceName);
 
         using (var reader = new System.IO.StreamReader(stream))
         {
@@ -580,5 +612,20 @@ public static class AKUtils
     }
 
     #endregion
+
+    #region WPF helpers
+
+    public static void Setter<T>(ref T field, T value, PropertyChangedEventHandler action, object sender, string name)
+    {
+        if (!object.Equals(field, value))
+        {
+            field = value;
+            if (action != null)
+                action(sender, new PropertyChangedEventArgs(name));
+        }
+    }
+
+    #endregion
+
 }
 
