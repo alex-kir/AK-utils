@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Xamarin.Forms;
+using System.Runtime.CompilerServices;
 
 
 public static class AKUtils
@@ -174,6 +175,43 @@ public static class AKUtils
             }
         }, uiScheduler);
         return self;
+    }
+
+    public static Task WithCancellableAwaiter(this Task task, CancellationToken token)
+    {
+        return task.ContinueWith(t => t.GetAwaiter().GetResult(), token);
+    }
+
+    public static Task<T> WithCancellableAwaiter<T>(this Task<T> task, CancellationToken token)
+    {
+        return task.ContinueWith(t => t.GetAwaiter().GetResult(), token);
+    }
+
+    public class TaskSchedulerAwaiter : INotifyCompletion
+    {
+        readonly TaskScheduler scheduler;
+        public TaskSchedulerAwaiter(TaskScheduler scheduler)
+        {
+            this.scheduler = scheduler;
+        }
+
+        public bool IsCompleted
+        { 
+            get { return false; }
+        }
+
+        public void OnCompleted(Action continuation)
+        {
+            var task = new Task(continuation);
+            task.Start(scheduler);
+        }
+
+        public void GetResult() { }
+    }
+
+    public static TaskSchedulerAwaiter GetAwaiter(this TaskScheduler self)
+    {
+        return new TaskSchedulerAwaiter(self);
     }
 
     #endregion
