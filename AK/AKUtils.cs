@@ -165,6 +165,16 @@ public static class AKUtils
         return string.IsNullOrEmpty(self);
     }
 
+    public static string Format(this string self, params object [] args)
+    {
+        return string.Format(self, args);
+    }
+
+    public static string F(this string self, params object [] args)
+    {
+        return string.Format(self, args);
+    }
+
     public static double ToDouble(this string self)
     {
         double d = 0;
@@ -303,7 +313,7 @@ public static class AKUtils
     public static Image AddImage(this RelativeLayout.IRelativeList<View> self, string name, Func<RelativeLayout, double> x, Func<RelativeLayout, double> y, Func<RelativeLayout, double> w = null, Func<RelativeLayout, double> h = null)
     {
         Image ret;
-        self.Add(ret = new Image { Source = ImageSource.FromResource("railwayUA.Images." + name) }, x, y, w, h);
+        self.Add(ret = new Image().SetResource(name), x, y, w, h);
         return ret;
     }
 
@@ -338,6 +348,20 @@ public static class AKUtils
         foreach (var child in children)
             self.Children.Add(child.view, child.x, child.y, child.width, child.height);
         return self;
+    }
+
+    public static void OnItemTapped<T>(this ListView self, Action<T> action)
+    {
+        self.ItemTapped += (sender, e) => {
+            try {
+                if (e.Item != null)
+                    action((T)e.Item);
+                ((ListView)sender).SelectedItem = null;
+            }
+            catch (Exception ex) {
+                ex.LogException();
+            }
+        };
     }
 
     #endregion
