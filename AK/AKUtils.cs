@@ -1,4 +1,6 @@
 ﻿
+//#define XAMARIN_FORMS
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -9,11 +11,13 @@ using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Xamarin.Forms;
 using System.Runtime.CompilerServices;
 
+#if XAMARIN_FORMS
+using Xamarin.Forms;
+#endif
 
-public static class AKUtils
+internal static class AKUtils
 {
     #region System.Action, System.Func
 
@@ -256,6 +260,8 @@ public static class AKUtils
 
     #endregion
 
+#if XAMARIN_FORMS
+    
     #region Xamarin.Forms.View
 
     public static T AddTapAction<T>(this T self, Action execute, bool animateBackground = true) where T : Xamarin.Forms.View
@@ -364,7 +370,14 @@ public static class AKUtils
         };
     }
 
+    public static ImageSource CompleteImageSource(string resourceName)
+    {
+        return ImageSource.FromResource("railwayUA.Images." + resourceName);
+    }
+
     #endregion
+
+#endif
 
     #region Debugging
 
@@ -424,7 +437,7 @@ public static class AKUtils
 #if DEBUG
         try
         {
-            int baseStackIndex = Device.OnPlatform(1, 6, 3);
+            int baseStackIndex = OnPlatform(1, 6, 3);
             var frame = _mscorlib_System_Diagnostics_StackFrame_int_bool.Invoke(new object[] { baseStackIndex + stackIndex, true });
 
             var thread = _mscorlib_System_Threading_Thread_CurrentThread.GetValue(null);
@@ -443,7 +456,7 @@ public static class AKUtils
             var methodInfo = (frameMethod != null ? frameMethod.DeclaringType.Name + "." + frameMethod.Name : "?.?") + "(" + arguments + ")";
             var msg = threadInfo + " " + dateInfo + " " + methodInfo + " " + message + " " + backrefInfo;
 
-            Device.OnPlatform(
+            OnPlatform(
                 () => System.Diagnostics.Debug.WriteLine(tag + msg),
                 () => _Mono_Android_Android_Util_Log_Debug_string_string.Invoke(null, new object[] { tag, msg }),
                 () => System.Diagnostics.Debug.WriteLine(tag + msg)
@@ -612,75 +625,26 @@ public static class AKUtils
         return null;
     }
 
-    //public static PropertyInfo FindProperty(object instance, string propertyName)
-    //{
-    //    var t = instance.GetType();
-    //    var p = t.GetRuntimeProperty(propertyName);
-    //    return p;
-    //}
+    public static void OnPlatform(Action ios,Action android, Action wp)
+    {
+        if (_Mono_Android_Android_Util_Log_Debug_string_string != null) {
+            android();
+        }
+        else
+            throw new NotImplementedException();
+    }
 
-    //public static void NativeCallStatic(string className, string methodName, params object[] args)
-    //{
-    //    var n = new AssemblyName("Mono.Android");
-    //    var a = Assembly.Load(n);
-    //    var t = a.ExportedTypes.FirstOrDefault(it => it.FullName == className);
-    //    var m = t.GetRuntimeMethod(methodName, args.Select(it => it.GetType()).ToArray());
-    //    m.Invoke(null, args);
-    //}
+    public static T OnPlatform<T>(T ios, T android, T wp)
+    {
+        T ret = default(T);
+        OnPlatform(() => ret = ios, () => ret = android, () => ret = wp);
+        return ret;
+    }
 
-
-    //public static object NativeCallConstructor(string assemblyName, string namespaceName, string className, params object[] args)
-    //{
-    //    var n = new AssemblyName(assemblyName); // "mscorlib", "Mono.Android"
-    //    var a = Assembly.Load(n);
-    //    var t = a.ExportedTypes.FirstOrDefault(it => it.Name == className && it.Namespace == namespaceName);
-    //    var ti = t.GetTypeInfo();
-    //    var cc = ti.DeclaredConstructors;
-    //    foreach (var c in cc)
-    //    {
-    //        var pp = c.GetParameters();
-    //        if (pp.Length == args.Length)
-    //        {
-    //            if (Enumerable.Range(0, pp.Length).All(it => pp[it].ParameterType == args[it].GetType()))
-    //            {
-    //                return c.Invoke(args);
-    //            }
-    //        }
-    //    }
-    //    return null;
-    //}
-
-    //public static object NativeCallGetterStatic(string assemblyName, string namespaceName, string className, string propertyName)
-    //{
-    //    var n = new AssemblyName(assemblyName); // "mscorlib", "Mono.Android"
-    //    var a = Assembly.Load(n);
-    //    var t = a.ExportedTypes.FirstOrDefault(it => it.Name == className && it.Namespace == namespaceName);
-    //    var p = t.GetRuntimeProperty(propertyName);
-    //    return p.GetValue(null);
-    //}
-
-    //public static object NativeCallGetter(object instance, string propertyName)
-    //{
-    //    var t = instance.GetType();
-    //    var p = t.GetRuntimeProperty(propertyName);
-    //    return p.GetValue(instance);
-    //}
-
-    //public static object NativeCallMethod(object instance, string methodName, params object[] args)
-    //{
-    //    var t = instance.GetType();
-    //    var m = t.GetRuntimeMethod(methodName, args.Select(it => it.GetType()).ToArray());
-    //    return m.Invoke(instance, args);
-    //}
 
     #endregion
 
     #region Resources
-
-    public static ImageSource CompleteImageSource(string resourceName)
-    {
-        return ImageSource.FromResource("railwayUA.Images." + resourceName);
-    }
 
     public static string LoadRawString(string resourceName, string assemblyName = null)
     {
