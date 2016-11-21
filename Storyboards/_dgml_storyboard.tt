@@ -1,0 +1,321 @@
+﻿<#@ template debug="false" hostspecific="true" language="C#" #>
+<#@ output extension=".g.cs" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="System.Xml" #>
+<#@ assembly name="System.Xml.Linq" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.IO" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.Xml.Linq" #>
+<#
+//WriteLine("// " + DateTime.Now);
+
+var xmlPath = Path.ChangeExtension(this.Host.TemplateFile, "dgml");
+if (!File.Exists(xmlPath)) return null;
+var xml = XDocument.Load(xmlPath);
+var nodesAll = xml.Root.Descendants()
+	.Where(it => it.Name.LocalName == "Node")
+	.Select(it => new Node(it))
+	.OrderBy(it => it.Name)
+	.ToList();
+
+Node.JoinNodes(nodesAll);
+
+var nodes = nodesAll.Where(it => !it.IsSystem && !it.IsComment).ToList();
+var links = xml.Root.Descendants().Where(it => it.Name.LocalName == "Link").Select(it => new Link(it, nodesAll)).ToList();
+
+nodesAll.ForEach(it => it.Links.Sort((a,b) => a.name.CompareTo(b.name)));
+
+var startNodes = nodesAll.Where(it => it.IsSystem).ToList();
+
+var _comments = startNodes.SelectMany(it => it.Comments).SelectMany(it => it.Split('\r', '\n')).ToList();
+var _props_usings = _comments.Where(it => it.StartsWith("using")).Select(it => it.Substring(5).Trim(' ', ';')).ToList();
+var _props_namespace = _comments.Where(it => it.StartsWith("namespace")).Select(it => it.Substring(9).Trim()).FirstOrDefault() ?? "_empty";
+var _props_classname = Path.GetFileNameWithoutExtension(this.Host.TemplateFile);
+var _props_classmodificator = "internal";
+
+string tagClass = "class";
+string tagPublicClass = "public class";
+foreach (var comment in _comments)
+{
+	if (comment.StartsWith(tagClass))
+		_props_classname = comment.Substring(tagClass.Length).Trim();
+	if (comment.StartsWith(tagPublicClass) && comment.Substring(tagPublicClass.Length).Trim() != "")
+		_props_classname = comment.Substring(tagPublicClass.Length).Trim();
+	if (comment.StartsWith(tagPublicClass))
+		_props_classmodificator = "public";
+}
+
+#>
+// ------------------ auto-generated file ---------------------- //
+<# foreach (var comment in _comments) { #>
+// <#=comment#>
+<# } #>
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+<# foreach (var @using in _props_usings) { #>
+using <#=@using#>;
+<# } #>
+
+namespace <#=_props_namespace#>
+{
+    <#=_props_classmodificator#> abstract class <#=_props_classname#>
+    {
+        private Func<CancellationToken, Task> stateRunner;
+        private CancellationTokenSource cts;
+		
+        private static CancellationTokenSource NewCts(ref CancellationTokenSource cts, params CancellationToken[] tokens)
+        {
+            var newCts = tokens.Length == 0 ? new CancellationTokenSource() : CancellationTokenSource.CreateLinkedTokenSource(tokens);
+            var tmp = Interlocked.Exchange(ref cts, newCts);
+            if (tmp != null)
+                tmp.Cancel();
+            return newCts;
+        }
+
+        private static void DeleteCts(ref CancellationTokenSource cts)
+        {
+            var tmp = Interlocked.Exchange(ref cts, null);
+            if (tmp != null)
+                tmp.Cancel();
+        }
+
+<# foreach (var node in startNodes) { #>
+<# if (node.Links.FirstOrDefault() == null) continue; #>
+<# var nextNode = node.Links.First().Target; #>
+<# var nextNodeType = node.Links.First().Type; #>
+<# if (nextNodeType == "") { #>
+        public async Task RunFrom<#=node.Name#>(CancellationToken externalToken)
+        {
+		    System.Diagnostics.Debug.WriteLine("<#=_props_classname#>: started from <#=node.Name#>");
+			var token = NewCts(ref cts, externalToken).Token;
+			Continue(<#=nextNode.Name#>StateRunner, new <#=nextNode.Name#>State());
+			await Run(token);
+        }
+<# } else { #>
+        public async Task RunFrom<#=node.Name#>(<#=nextNodeType#> arg, CancellationToken externalToken)
+        {
+		    System.Diagnostics.Debug.WriteLine("<#=_props_classname#>: started from <#=node.Name#> with <#=nextNodeType#>");
+			NewCts(ref cts, externalToken);
+			Continue(<#=nextNode.Name#>StateRunner, new <#=nextNode.Name#>State(), arg);
+			await Run(token);
+        }
+<# } #>
+
+<# } #>
+
+
+		private async Task Run(CancellationToken token)
+        {
+			try
+			{
+				while (!token.IsCancellationRequested)
+					await stateRunner(token);
+			}
+			catch (OperationCanceledException)
+			{
+				System.Diagnostics.Debug.WriteLine("<#=_props_classname#>: stopped");
+			}
+			catch (Exception ex)
+			{
+				System.Diagnostics.Debug.WriteLine("<#=_props_classname#>: stopped by " + ex.Message);
+				throw;
+			}
+        }
+
+        protected void Stop()
+        {
+            DeleteCts(ref cts);
+        }
+
+        protected void Continue<TState>(Func<CancellationToken, TState, Task> nextRunner, TState state)
+        {
+            stateRunner = token => nextRunner(token, state);
+        }
+
+		protected void Continue<TState,T1>(Func<CancellationToken, TState, T1, Task> nextRunner, TState state, T1 arg1)
+        {
+            stateRunner = token => nextRunner(token, state, arg1);
+        }
+
+		// ------------------ transitions --------------------------- //
+<# foreach (var link in links.Where(it => !it.HasComment).GroupBy(it => it.Target.Name + "#" + it.Type).OrderBy(it => it.Key).Select(it => it.First()).ToList()) { #>
+<# string argsDefinition = (link.Type == "" ? "" : ", " + link.Type + " arg1"); #>
+<# string argsUsing = (link.Type == "" ? "" : ", arg1"); #>
+
+		protected abstract void <#=link.Target.Name#>(<#=link.Target.Name#>State state<#=argsDefinition#>);
+		
+		async Task <#=link.Target.Name#>StateRunner(CancellationToken token, <#=link.Target.Name#>State state<#=argsDefinition#>)
+        {
+			System.Diagnostics.Debug.WriteLine("STATE: <#=link.Target.Name#>");
+			<#=link.Target.Name#>(state<#=argsUsing#>);
+
+            (await state.GetResult(token)).Match(
+<# string comma = ""; foreach (var result in link.Target.Links) { #>
+<# if (result.Target.Name == "[STOP]") { #>
+				<#=comma#>@<#=result.name#>: Stop
+<# } else if (result.Type == "") { #>
+				<#=comma#>@<#=result.name#>: () => Continue(<#=result.Target.Name#>StateRunner, new <#=result.Target.Name#>State())
+<# } else { #>
+				<#=comma#>@<#=result.name#>: it => Continue(<#=result.Target.Name#>StateRunner, new <#=result.Target.Name#>State(), it)
+<# } #>
+<# comma = ", "; } #>
+                );
+        }
+<# } #>
+
+		// ------------------ states --------------------------- //
+
+		<#=_props_classmodificator#> class State<T>
+		{
+			protected TaskCompletionSource<T> completion = new TaskCompletionSource<T>();
+
+			public async Task<T> GetResult(CancellationToken token)
+			{
+				using (var registration = token.Register(() => completion.TrySetCanceled()))
+				{
+					var ret = await completion.Task;
+	                //registration.Dispose();
+					return ret;
+				}
+			}
+		}
+<# foreach (var node in nodes) { #>
+
+<# var matchArgs = string.Join(", ", node.Links.Select(it => "Action" + (it.Type != "" ? "<" + it.Type + ">" : "") + " @" + it.name)); #>
+		<#=_props_classmodificator#> partial class <#=node.Name#>State : State<<#=node.Name#>State.Result>
+		{
+			<#=_props_classmodificator#> abstract class Result
+			{
+				public abstract void Match(<#=matchArgs#>);
+<# foreach (var link in node.Links) { #>
+
+<# if (link.Type == "") { #>
+				<#=_props_classmodificator#> class <#=link.Name#> : Result
+				{
+					public override void Match(<#=matchArgs#>)
+					{
+						System.Diagnostics.Debug.WriteLine("STATE: +---> <#=link.name#>");
+						@<#=link.name#>();
+					}
+				}
+<# } else {#>
+				<#=_props_classmodificator#> class <#=link.Name#> : Result
+				{
+					private <#=link.Type#> result;
+
+					public <#=link.Name#>(<#=link.Type#> result)
+					{
+						this.result = result;
+					}
+
+					public override void Match(<#=matchArgs#>)
+					{
+						System.Diagnostics.Debug.WriteLine("STATE: +---> <#=link.name#>");
+						@<#=link.name#>(result);
+					}
+				}
+<# } #>
+<# } #>
+			}
+
+<# foreach (var link in node.Links) { #>
+
+<# if (link.Type == "") { #>
+			public void CompleteWith<#=link.Name#>()
+			{
+				completion.SetResult(new Result.<#=link.Name#>());
+			}
+<# } else {#>
+			public void CompleteWith<#=link.Name#>(<#=link.Type#> result)
+			{
+				completion.SetResult(new Result.<#=link.Name#>(result));
+			}
+<# } #>
+<# } #>
+		}
+<# } #>
+
+    }
+}
+
+<#+
+class Node
+{
+	internal List<string> ids { get; private set; }
+	internal bool IsComment { get; private set; }
+	internal bool IsSystem { get; private set; }
+	internal string Name { get; private set; }
+	internal List<Link> Links { get; private set; }
+	internal List<string> Comments { get; private set; }
+
+	internal Node(XElement x)
+	{
+		string id = (x.Attribute("Id")?.Value).Trim();
+		ids = new List<string>{ id };
+		var category = x.Attribute("Category")?.Value ?? "";
+		IsComment = category == "Comment";
+		Name = (x.Attribute("Label")?.Value ?? id).Trim();
+		IsSystem = Name.StartsWith("[") && Name.EndsWith("]");
+		Name = Name.Trim('[', ']');
+		Links = new List<Link>();
+		Comments = new List<string>();
+	}
+
+	internal static void JoinNodes(List<Node> nodes)
+	{
+		var groups = nodes.GroupBy(it => it.Name).ToList();
+		nodes.Clear();
+		foreach (var g in groups)
+		{
+			var node = g.First();
+			var ids = g.SelectMany(it => it.ids).ToList();
+			node.ids.Clear();
+			node.ids.AddRange(ids);
+			nodes.Add(node);
+		}
+	}
+}
+
+class Link
+{
+	internal Node Source { get; private set; }
+	internal Node Target { get; private set; }
+	internal string Name { get; private set; }
+	internal string name { get; private set; }
+	internal string Type { get; private set; }
+	internal bool HasComment { get; private set; }
+
+	internal Link(XElement x, IList<Node> nodes)
+	{
+		Source = nodes.First(it => it.ids.Contains(x.Attribute("Source").Value));
+		Target = nodes.First(it => it.ids.Contains(x.Attribute("Target").Value));
+		var labels = (x.Attribute("Label")?.Value ?? "").Split(',');
+		Name = labels.First().Trim();
+		name = Name.ToLower();
+		Type = labels.Skip(1).FirstOrDefault() ?? "";
+		if (!Source.IsComment && !Target.IsComment)
+		{
+			Source.Links.Add(this);
+			HasComment = false;
+		}
+		else if (Source.IsComment)
+		{
+			Target.Comments.Add(Source.Name);
+			HasComment = true;
+		}
+		else
+		{
+			Source.Comments.Add(Target.Name);
+			HasComment = true;
+		}
+	}
+}
+
+#>

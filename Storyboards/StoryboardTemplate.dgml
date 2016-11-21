@@ -1,0 +1,66 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<DirectedGraph GraphDirection="TopToBottom" Layout="Sugiyama" ZoomLevel="-1" xmlns="http://schemas.microsoft.com/vs/2009/dgml">
+  <Nodes>
+    <Node Id="AddingCustomer" Bounds="611.928839347505,261.72949514916,71.1966666666667,25.96" Label="Customer" UseManualLocation="True" />
+    <Node Id="Directions" Bounds="245.871666666667,16.26,66.8566666666667,25.96" Label="Calendar" UseManualLocation="True" />
+    <Node Id="NamespaceRailwayBy.StateMachines" Category="Comment" Bounds="530.062541910807,-159.603110150146,240.106666666667,57.88" Label="using BusinessContacts.Model&#xD;&#xA;namespace BusinessContacts.Storyboards&#xD;&#xA;class StoryboardTemplate" UseManualLocation="True" />
+    <Node Id="NewCustomer" Bounds="414.873574322928,253.283924459178,95.1233333333333,25.96" UseManualLocation="True" />
+    <Node Id="Order" Bounds="-78.5683333333334,119.1,50.7366666666667,25.96" UseManualLocation="True" />
+    <Node Id="Order_SelectCustomerCar" Bounds="-371.481229044596,117.416889849854,156.066666666667,25.96" UseManualLocation="True" />
+    <Node Id="SelectCustomer" Bounds="215.98,257.68,120.35,25.96" Label="SelectCustomerCar" UseManualLocation="True" />
+    <Node Id="Trains" Bounds="610.303721667855,28.4263882561845,76.29,25.96" Label="Customers" UseManualLocation="True" />
+    <Node Id="[CalendarTab]" Bounds="234.923732017645,-79.7413367871017,92.1966666666667,25.96" UseManualLocation="True" />
+    <Node Id="[START]" Bounds="600.480715332031,-71.7230101501465,101.63,25.96" Label="[CustomersTab]" UseManualLocation="True" />
+  </Nodes>
+  <Links>
+    <Link Source="AddingCustomer" Target="Trains" Bounds="644.551574707031,63.3862953186035,0.796875,198.343196868896" Label="Save" LabelBounds="616.271868346512,179.050222818382,24.5033333333326,15.96" />
+    <Link Source="AddingCustomer" Target="Trains" Index="1" Bounds="650.551574707031,63.3862953186035,0.79693603515625,198.343196868896" Label="Close" LabelBounds="654.775136398342,179.096871013337,28.7366666666667,15.96" />
+    <Link Source="Directions" Target="Order" Index="1" Bounds="-19.2717456817627,32.2311248779297,265.143419265747,94.512939453125" Label="Edit,WorkOrder" LabelBounds="164.595690686695,63.6949622272697,81.3533333333331,15.96" />
+    <Link Source="Directions" Target="SelectCustomer" Bounds="273.509399414063,42.2200012207031,1.75436401367188,206.463119506836" Label="Add,WorkOrder" LabelBounds="187.731126302981,145.446317489976,83.1166666666668,15.96" />
+    <Link Source="NamespaceRailwayBy.StateMachines" Target="[START]" Bounds="650.590632261213,-101.723110150146,0.344523830947423,21.0013107949414" />
+    <Link Source="NewCustomer" Target="Directions" Index="1" Bounds="298.718383789063,49.7220306396484,157.524810791016,203.561889648438" Label="Save" LabelBounds="382.477309453217,140.477927139763,24.5033333333333,15.96" />
+    <Link Source="NewCustomer" Target="Directions" Bounds="291.521667480469,49.7571411132813,157.154266357422,203.526779174805" Label="Back" LabelBounds="347.161078336048,158.816637514803,24.4933333333333,15.96" />
+    <Link Source="Order" Target="Directions" Index="1" Bounds="-27.8316669464111,41.6875534057617,265.243577957153,94.1414260864258" Label="Close" LabelBounds="43.1285332324928,113.53346958906,28.7366666666667,15.96" />
+    <Link Source="Order" Target="Directions" Bounds="-27.8316669464111,28.9309692382813,265.249101638794,94.2859497070313" Label="Save" LabelBounds="42.0945673244222,72.1815768819106,24.5033333333331,15.96" />
+    <Link Source="Order" Target="Order_SelectCustomerCar" Bounds="-206.414581298828,127.574462890625,127.846244812012,1.12896728515625" Label="SelectCar,WorkOrder" LabelBounds="-202.218834929479,107.919972534139,110.396666666667,15.96" />
+    <Link Source="Order_SelectCustomerCar" Target="Order" Bounds="-215.414566040039,133.556106567383,127.847221374512,1.0145263671875" Label="Back,WorkOrder" LabelBounds="-190.06458643903,137.879020755099,85.7366666666667,15.96" />
+    <Link Source="SelectCustomer" Target="Directions" Bounds="279.272766113281,51.210334777832,1.98919677734375,206.469657897949" Label="Back" LabelBounds="284.833647336096,147.472963269932,24.4933333333333,15.96" />
+    <Link Source="SelectCustomer" Target="NewCustomer" Bounds="336.33,267.59867872716,69.5460794390906,1.64123589897719" Label="AddNew" LabelBounds="348.155854340287,248.459296521652,45.8,15.96" />
+    <Link Source="SelectCustomer" Target="Order" Bounds="-19.6102257323816,146.213293613294,264.916417101988,111.466706386706" Label="Select,WorkOrder" LabelBounds="19.3856575892192,203.790109253802,92.6866666666667,15.96" />
+    <Link Source="Trains" Target="AddingCustomer" Index="1" Bounds="656.568542480469,54.3863868713379,0.821044921875,198.343120574951" Label="Add" LabelBounds="660.895780230379,153.248660266287,21.8733333333332,15.96" />
+    <Link Source="Trains" Target="AddingCustomer" Bounds="638.568481445313,54.3863868713379,0.8209228515625,198.343120574951" Label="Edit,Customer" LabelBounds="560.989309409173,153.146034237392,73.9066666666674,15.9599999999998" />
+    <Link Source="[CalendarTab]" Target="Directions" Bounds="279.694249755236,-53.7813367871017,1.09498125193221,61.0427843999144" />
+    <Link Source="[START]" Target="Trains" Bounds="649.073454065531,-45.7630101501465,1.85327275185091,65.193032747561" />
+  </Links>
+  <Categories>
+    <Category Id="Comment" Label="Comment" Description="Represents a user defined comment on the diagram" CanBeDataDriven="True" IsProviderRoot="False" NavigationActionLabel="Comments" />
+  </Categories>
+  <Properties>
+    <Property Id="Bounds" DataType="System.Windows.Rect" />
+    <Property Id="CanBeDataDriven" Label="CanBeDataDriven" Description="CanBeDataDriven" DataType="System.Boolean" />
+    <Property Id="Expression" DataType="System.String" />
+    <Property Id="GraphDirection" DataType="Microsoft.VisualStudio.Diagrams.Layout.LayoutOrientation" />
+    <Property Id="GroupLabel" DataType="System.String" />
+    <Property Id="IsEnabled" DataType="System.Boolean" />
+    <Property Id="IsProviderRoot" Label="IsProviderRoot" Description="IsProviderRoot" DataType="System.Boolean" />
+    <Property Id="Label" Label="Label" Description="Displayable label of an Annotatable object" DataType="System.String" />
+    <Property Id="LabelBounds" DataType="System.Windows.Rect" />
+    <Property Id="Layout" DataType="System.String" />
+    <Property Id="NavigationActionLabel" Label="NavigationActionLabel" Description="NavigationActionLabel" DataType="System.String" />
+    <Property Id="TargetType" DataType="System.Type" />
+    <Property Id="UseManualLocation" DataType="System.Boolean" />
+    <Property Id="Value" DataType="System.String" />
+    <Property Id="ValueLabel" DataType="System.String" />
+    <Property Id="ZoomLevel" DataType="System.String" />
+  </Properties>
+  <Styles>
+    <Style TargetType="Node" GroupLabel="Comment" ValueLabel="Has comment">
+      <Condition Expression="HasCategory('Comment')" />
+      <Setter Property="Background" Value="#FFFFFACD" />
+      <Setter Property="Stroke" Value="#FFE5C365" />
+      <Setter Property="StrokeThickness" Value="1" />
+      <Setter Property="NodeRadius" Value="2" />
+      <Setter Property="MaxWidth" Value="250" />
+    </Style>
+  </Styles>
+</DirectedGraph>
