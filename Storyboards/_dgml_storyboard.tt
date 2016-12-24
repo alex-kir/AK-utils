@@ -68,7 +68,7 @@ namespace <#=_props_namespace#>
     <#=_props_classmodificator#> abstract class <#=_props_classname#>
     {
         private Func<CancellationToken, Task> stateRunner;
-        private CancellationTokenSource cts;
+        protected CancellationTokenSource cts;
 		
         private static CancellationTokenSource NewCts(ref CancellationTokenSource cts, params CancellationToken[] tokens)
         {
@@ -102,7 +102,7 @@ namespace <#=_props_namespace#>
         public async Task RunFrom<#=node.Name#>(<#=nextNodeType#> arg, CancellationToken externalToken)
         {
 		    System.Diagnostics.Debug.WriteLine("<#=_props_classname#>: started from <#=node.Name#> with <#=nextNodeType#>");
-			NewCts(ref cts, externalToken);
+			var token = NewCts(ref cts, externalToken).Token;
 			Continue(<#=nextNode.Name#>StateRunner, new <#=nextNode.Name#>State(), arg);
 			await Run(token);
         }
@@ -153,7 +153,7 @@ namespace <#=_props_namespace#>
 		
 		async Task <#=link.Target.Name#>StateRunner(CancellationToken token, <#=link.Target.Name#>State state<#=argsDefinition#>)
         {
-			System.Diagnostics.Debug.WriteLine("STATE: <#=link.Target.Name#>");
+			System.Diagnostics.Debug.WriteLine("STATE(<#=_props_classname#>): <#=link.Target.Name#>");
 			<#=link.Target.Name#>(state<#=argsUsing#>);
 
             (await state.GetResult(token)).Match(
@@ -201,7 +201,7 @@ namespace <#=_props_namespace#>
 				{
 					public override void Match(<#=matchArgs#>)
 					{
-						System.Diagnostics.Debug.WriteLine("STATE: +---> <#=link.name#>");
+						System.Diagnostics.Debug.WriteLine("STATE(<#=_props_classname#>): +---> <#=link.name#>");
 						@<#=link.name#>();
 					}
 				}
@@ -217,7 +217,7 @@ namespace <#=_props_namespace#>
 
 					public override void Match(<#=matchArgs#>)
 					{
-						System.Diagnostics.Debug.WriteLine("STATE: +---> <#=link.name#>");
+						System.Diagnostics.Debug.WriteLine("STATE(<#=_props_classname#>): +---> <#=link.name#>");
 						@<#=link.name#>(result);
 					}
 				}
