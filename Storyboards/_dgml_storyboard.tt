@@ -180,10 +180,13 @@ namespace <#=_props_namespace#>
 			{
 				using (var registration = token.Register(() => completion.TrySetCanceled()))
 				{
-					var ret = await completion.Task;
-	                //registration.Dispose();
-					return ret;
+					return await completion.Task;
 				}
+			}
+
+			public Task<T> GetResult()
+			{
+				return completion.Task;
 			}
 		}
 <# foreach (var node in nodes) { #>
