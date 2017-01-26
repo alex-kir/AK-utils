@@ -39,9 +39,21 @@ using WindowsStore.Compatibility.Reflection;
 
 public class AKJson
 {
+    public enum SerializableModes
+    {
+        WhiteList,
+        PublicProperties,
+    }
+
     public class Serializable : Attribute
     {
+        public SerializableModes Mode { get; private set; }
+        public Serializable(SerializableModes mode = SerializableModes.WhiteList)
+        {
+            Mode = mode;
+        }
     }
+
     char[] unicodeCharArray = new char[4];
 
     #region Encoding
@@ -68,15 +80,23 @@ public class AKJson
         if (source.GetType().HasCustomAttribute(typeof(AKJson.Serializable)))
         {
             var ret = new Dictionary<string, object>();
+            new AKJson.Serializable();
+
+            var attr = source.GetType().GetCustomAttribute<AKJson.Serializable>();
+            var mode = attr.Mode;
 
             // --- Scan Properties ---
             foreach (var property in source.GetType().GetRuntimeProperties())
             {
-                var propertyAttributes = property.GetCustomAttributes(typeof(AKJson.Serializable), true);
-                if (propertyAttributes.FirstOrDefault() != null)
-                {
+                bool yes = false;
+                if (mode == SerializableModes.PublicProperties)
+                    yes = true;
+                else if (property.HasCustomAttribute<AKJson.Serializable>())
+                    yes = true;
+
+                if (yes)
                     ret[property.Name] = PrepeareForEncoding(property.GetValue(source, null));
-                }
+                
             }
 
             // --- Scan Fields ---
@@ -123,7 +143,11 @@ public class AKJson
 
     private bool EncodeValue(object value, StringBuilder builder)
     {
-        if (value is string)
+        if (value == null)
+        {
+            builder.Append("null");
+        }
+        else if (value is string)
         {
             EncodeString((string)value, builder);
         }
@@ -135,21 +159,13 @@ public class AKJson
         {
             EncodeArray((ICollection)value, builder);
         }
+        else if ((value is Boolean))
+        {
+            builder.Append((Boolean)value ? "true" : "false");
+        }
         else if (IsNumeric(value))
         {
             EncodeNumber(Convert.ToDouble(value), builder);
-        }
-        else if ((value is Boolean) && ((Boolean)value == true))
-        {
-            builder.Append("true");
-        }
-        else if ((value is Boolean) && ((Boolean)value == false))
-        {
-            builder.Append("false");
-        }
-        else if (value == null)
-        {
-            builder.Append("null");
         }
         else
         {
@@ -321,15 +337,28 @@ public class AKJson
         {
             var dictionary = (source as IDictionary);
             var ret = Activator.CreateInstance(type);
+            var attr = type.GetCustomAttribute<AKJson.Serializable>();
+            var mode = attr.Mode;
 
             // --- Scan Properties ---
             foreach (var property in type.GetRuntimeProperties())
             {
-                var propertyAttributes = property.GetCustomAttributes(typeof(AKJson.Serializable), true);
-                if (propertyAttributes.FirstOrDefault() != null && dictionary.Contains(property.Name))
+                if (dictionary.Contains(property.Name))
                 {
-                    var val = TransformObject(dictionary[property.Name], property.PropertyType);
-                    property.SetValue(ret, val, null);
+                    bool yes = false;
+                    if (mode == SerializableModes.PublicProperties)
+                        yes = true;
+                    else if (property.HasCustomAttribute<AKJson.Serializable>())
+                        yes = true;
+                    if (yes)
+                    {
+                        var val = TransformObject(dictionary[property.Name], property.PropertyType);
+                        if (property.SetMethod == null)
+                        {
+                            continue;
+                        }
+                        property.SetValue(ret, val, null);
+                    }
                 }
             }
 
@@ -419,21 +448,33 @@ public class AKJson
     {
         try
         {
+            if (json == null)
+                return null;
             object obj = new AKJson().DecodeJson(json);
             if (obj == null)
                 return null;
             return (T)TransformObject(obj, typeof(T));
         }
+#if DEBUG
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine("[AKJson] " + ex);
+            return null;
+        }
+#else
         catch
         {
             return null;
         }
+#endif
     }
 
     public static object DecodeOrNull(string json)
     {
         try
         {
+            if (json == null)
+                return null;
             return new AKJson().DecodeJson(json);
         }
         catch
@@ -461,7 +502,7 @@ public class AKJson
         EatWhitespace(json, ref index);
 
         var ch = json[index];
-        if (ch == '"')
+        if (ch == '"' || ch == '\'')
             return DecodeString(json, ref index);
         if (ch == '{')
             return DecodeObject(json, ref index);
@@ -554,13 +595,15 @@ public class AKJson
     {
         StringBuilder s = new StringBuilder();
 
+        char bounds = (json[index] == '"') ? '"' : '\'';
+
         // "
-        Eat(json, ref index, '"');
+        Eat(json, ref index, bounds);
 
         while (true)
         {
             char c = json[index++];
-            if (c == '"')
+            if (c == bounds)
             {
                 break;
             }
@@ -696,7 +739,30 @@ public static class TypeExtentions
         #endif
     }
 
-    #if !PCL
+    public static bool HasCustomAttribute<T>(this PropertyInfo self)
+    {
+        var propertyAttributes = self.GetCustomAttributes(typeof(AKJson.Serializable), true);
+        return propertyAttributes.FirstOrDefault() != null;
+    }
+
+    public static T GetCustomAttribute<T>(this Type self)
+    {
+        #if PCL
+        var attrData = self.GetTypeInfo().CustomAttributes.FirstOrDefault();
+        object[] args = attrData.ConstructorArguments.Select(it => it.Value).ToArray();
+        var ctor = attrData.AttributeType.GetTypeInfo().DeclaredConstructors.FirstOrDefault();
+        if (ctor != null)
+            return (T)ctor.Invoke(args);
+        //attrData.Constructor.Invoke(args);
+        return (T)Activator.CreateInstance(typeof(T), args);
+        //return new T();
+        #else
+        return self.GetCustomAttributes(attributeType, true).OfType<T>().FirstOrDefault();
+        #endif
+    }
+
+
+#if !PCL
     public static IEnumerable<PropertyInfo> GetRuntimeProperties(this Type self)
     {
         return self.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.GetProperty | BindingFlags.SetProperty);
@@ -705,6 +771,6 @@ public static class TypeExtentions
     {
         return self.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
     }
-    #endif
+#endif
 
 }
