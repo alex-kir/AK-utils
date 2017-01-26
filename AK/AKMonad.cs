@@ -16,6 +16,11 @@ public static class AKMonad
             this.failed = failed;
         }
 
+        public override string ToString()
+        {
+            return failed ? null : value.ToString();
+        }
+
         public T ToResult()
         {
             return value;
