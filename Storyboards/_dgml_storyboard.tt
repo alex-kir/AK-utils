@@ -233,12 +233,12 @@ namespace <#=_props_namespace#>
 <# if (link.Type == "") { #>
 			public void CompleteWith<#=link.Name#>()
 			{
-				completion.SetResult(new Result.<#=link.Name#>());
+				completion.TrySetResult(new Result.<#=link.Name#>());
 			}
 <# } else {#>
 			public void CompleteWith<#=link.Name#>(<#=link.Type#> result)
 			{
-				completion.SetResult(new Result.<#=link.Name#>(result));
+				completion.TrySetResult(new Result.<#=link.Name#>(result));
 			}
 <# } #>
 <# } #>
