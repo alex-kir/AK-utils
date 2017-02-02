@@ -520,7 +520,7 @@ public class AKJson
             Eat(json, ref index, 'n', 'u', 'l', 'l');
             return null;
         }
-        if ("0123456789".IndexOf(ch) != -1)
+        if ("-0123456789".IndexOf(ch) != -1)
             return DecodeNumber(json, ref index);
 
         throw new Exception();
@@ -552,6 +552,7 @@ public class AKJson
                 string name = DecodeString(json, ref index);
 
                 // :
+                EatWhitespace(json, ref index);
                 Eat(json, ref index, ':');
 
                 // value
