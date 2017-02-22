@@ -3,15 +3,15 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
 VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StoryboardsXamarinFormsDemo", "StoryboardsXamarinFormsDemo\StoryboardsXamarinFormsDemo.csproj", "{1A0D9A43-0ED4-409D-9E13-C2EED2493298}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StoryboardsXamarinFormsDemo", "StoryboardsXamarinFormsDemo\StoryboardsXamarinFormsDemo\StoryboardsXamarinFormsDemo.csproj", "{1A0D9A43-0ED4-409D-9E13-C2EED2493298}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StoryboardsXamarinFormsDemo.Droid", "StoryboardsXamarinFormsDemo.Droid\StoryboardsXamarinFormsDemo.Droid.csproj", "{5315FCCB-1DC5-4C36-8866-C0D5FAE194B2}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StoryboardsXamarinFormsDemo.Droid", "StoryboardsXamarinFormsDemo\StoryboardsXamarinFormsDemo.Droid\StoryboardsXamarinFormsDemo.Droid.csproj", "{5315FCCB-1DC5-4C36-8866-C0D5FAE194B2}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StoryboardsXamarinFormsDemo.iOS", "StoryboardsXamarinFormsDemo.iOS\StoryboardsXamarinFormsDemo.iOS.csproj", "{E558D466-3085-422F-88D5-C8F045923074}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StoryboardsXamarinFormsDemo.iOS", "StoryboardsXamarinFormsDemo\StoryboardsXamarinFormsDemo.iOS\StoryboardsXamarinFormsDemo.iOS.csproj", "{E558D466-3085-422F-88D5-C8F045923074}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StoryboardsXamarinFormsDemo.WinPhone", "StoryboardsXamarinFormsDemo.WinPhone\StoryboardsXamarinFormsDemo.WinPhone.csproj", "{CC5A674B-23B8-4364-A468-7FC21362B553}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StoryboardsXamarinFormsDemo.WinPhone", "StoryboardsXamarinFormsDemo\StoryboardsXamarinFormsDemo.WinPhone\StoryboardsXamarinFormsDemo.WinPhone.csproj", "{CC5A674B-23B8-4364-A468-7FC21362B553}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StoryboardsXamarinFormsDemo.Windows", "StoryboardsXamarinFormsDemo.Windows\StoryboardsXamarinFormsDemo.Windows.csproj", "{060F0E84-9EB7-4AEB-8531-343CF9C732BD}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StoryboardsXamarinFormsDemo.Windows", "StoryboardsXamarinFormsDemo\StoryboardsXamarinFormsDemo.Windows\StoryboardsXamarinFormsDemo.Windows.csproj", "{060F0E84-9EB7-4AEB-8531-343CF9C732BD}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

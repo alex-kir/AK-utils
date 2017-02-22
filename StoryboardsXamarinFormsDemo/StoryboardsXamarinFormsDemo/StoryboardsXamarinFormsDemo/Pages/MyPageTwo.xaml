@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<ContentPage xmlns="http://xamarin.com/schemas/2014/forms"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="StoryboardsXamarinFormsDemo.Pages.MyPageTwo">
+    <ContentPage.Content>
+        <StackLayout>
+            <Label Text="MyPageTwo"/>
+            <Label x:Name="label"/>
+            <Entry x:Name="entry"/>
+            <Button x:Name="button1" Text="Open One"/>
+            <Button x:Name="button3" Text="Open Three"/>
+        </StackLayout>
+    </ContentPage.Content>
+</ContentPage>
