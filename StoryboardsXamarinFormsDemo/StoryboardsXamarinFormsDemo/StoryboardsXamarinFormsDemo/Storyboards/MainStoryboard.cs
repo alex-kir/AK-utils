@@ -23,7 +23,7 @@ namespace StoryboardsXamarinFormsDemo.Storyboards
 
         protected override void MyPageOne(MyPageOneState state, string arg1)
         {
-            MainPage = new MyPageOne(state.CompleteWithShowTwo, arg1);
+            MainPage = new MyPageOne(it => state.CompleteWithShowTwo(it, 2), arg1);
         }
 
         protected override void MyPageTwo(MyPageTwoState state)
@@ -31,7 +31,7 @@ namespace StoryboardsXamarinFormsDemo.Storyboards
             MainPage = new MyPageTwo(state.CompleteWithShowOne, state.CompleteWithShowThree, lastValue);
         }
 
-        protected override void MyPageTwo(MyPageTwoState state, string arg1)
+        protected override void MyPageTwo(MyPageTwoState state, string arg1, int arg2)
         {
             lastValue = arg1;
             MyPageTwo(state);
