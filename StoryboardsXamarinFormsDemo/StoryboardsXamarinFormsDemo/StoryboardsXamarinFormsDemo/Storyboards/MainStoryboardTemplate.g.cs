@@ -17,7 +17,7 @@ namespace StoryboardsXamarinFormsDemo.Storyboards
     {
         private Func<CancellationToken, Task> stateRunner;
         protected CancellationTokenSource cts;
-		
+
         private static CancellationTokenSource NewCts(ref CancellationTokenSource cts, params CancellationToken[] tokens)
         {
             var newCts = tokens.Length == 0 ? new CancellationTokenSource() : CancellationTokenSource.CreateLinkedTokenSource(tokens);
@@ -94,8 +94,19 @@ namespace StoryboardsXamarinFormsDemo.Storyboards
 
 		// ------------------ transitions --------------------------- //
 
+		protected abstract void JustForTest(JustForTestState state, Tuple<List<int>,Tuple<int,int,string,Tuple<bool,bool>>> arg0, string arg1, Func<string,bool> arg2);
+
+		async Task JustForTestStateRunner(CancellationToken token, JustForTestState state, Tuple<List<int>,Tuple<int,int,string,Tuple<bool,bool>>> arg0, string arg1, Func<string,bool> arg2)
+        {
+			System.Diagnostics.Debug.WriteLine("STATE(MainStoryboardTemplate): JustForTest");
+			JustForTest(state, arg0, arg1, arg2);
+
+            (await state.GetResult(token)).Match(
+                );
+        }
+
 		protected abstract void MyPageOne(MyPageOneState state, string arg0);
-		
+
 		async Task MyPageOneStateRunner(CancellationToken token, MyPageOneState state, string arg0)
         {
 			System.Diagnostics.Debug.WriteLine("STATE(MainStoryboardTemplate): MyPageOne");
@@ -107,7 +118,7 @@ namespace StoryboardsXamarinFormsDemo.Storyboards
         }
 
 		protected abstract void MyPageThree(MyPageThreeState state);
-		
+
 		async Task MyPageThreeStateRunner(CancellationToken token, MyPageThreeState state)
         {
 			System.Diagnostics.Debug.WriteLine("STATE(MainStoryboardTemplate): MyPageThree");
@@ -119,27 +130,29 @@ namespace StoryboardsXamarinFormsDemo.Storyboards
         }
 
 		protected abstract void MyPageTwo(MyPageTwoState state);
-		
+
 		async Task MyPageTwoStateRunner(CancellationToken token, MyPageTwoState state)
         {
 			System.Diagnostics.Debug.WriteLine("STATE(MainStoryboardTemplate): MyPageTwo");
 			MyPageTwo(state);
 
             (await state.GetResult(token)).Match(
-				@showone: (it0) => Continue(MyPageOneStateRunner, new MyPageOneState(), it0)
+				@no: (it0, it1, it2) => Continue(JustForTestStateRunner, new JustForTestState(), it0, it1, it2)
+				, @showone: (it0) => Continue(MyPageOneStateRunner, new MyPageOneState(), it0)
 				, @showthree: () => Continue(MyPageThreeStateRunner, new MyPageThreeState())
                 );
         }
 
 		protected abstract void MyPageTwo(MyPageTwoState state, string arg0, int arg1);
-		
+
 		async Task MyPageTwoStateRunner(CancellationToken token, MyPageTwoState state, string arg0, int arg1)
         {
 			System.Diagnostics.Debug.WriteLine("STATE(MainStoryboardTemplate): MyPageTwo");
 			MyPageTwo(state, arg0, arg1);
 
             (await state.GetResult(token)).Match(
-				@showone: (it0) => Continue(MyPageOneStateRunner, new MyPageOneState(), it0)
+				@no: (it0, it1, it2) => Continue(JustForTestStateRunner, new JustForTestState(), it0, it1, it2)
+				, @showone: (it0) => Continue(MyPageOneStateRunner, new MyPageOneState(), it0)
 				, @showthree: () => Continue(MyPageThreeStateRunner, new MyPageThreeState())
                 );
         }
@@ -164,6 +177,14 @@ namespace StoryboardsXamarinFormsDemo.Storyboards
 			}
 		}
 
+		internal partial class JustForTestState : State<JustForTestState.Result>
+		{
+			internal abstract class Result
+			{
+				public abstract void Match();
+			}
+
+		}
 		internal partial class MyPageOneState : State<MyPageOneState.Result>
 		{
 			internal abstract class Result
@@ -176,8 +197,8 @@ namespace StoryboardsXamarinFormsDemo.Storyboards
 					private int result1;
 					public ShowTwo(string arg0, int arg1)
 					{
-					this.result0 = arg0;
-					this.result1 = arg1;
+						this.result0 = arg0;
+						this.result1 = arg1;
 					}
 
 					public override void Match(Action<string, int> @showtwo)
@@ -222,17 +243,36 @@ namespace StoryboardsXamarinFormsDemo.Storyboards
 		{
 			internal abstract class Result
 			{
-				public abstract void Match(Action<string> @showone, Action @showthree);
+				public abstract void Match(Action<Tuple<List<int>,Tuple<int,int,string,Tuple<bool,bool>>>, string, Func<string,bool>> @no, Action<string> @showone, Action @showthree);
+
+				internal class No : Result
+				{
+					private Tuple<List<int>,Tuple<int,int,string,Tuple<bool,bool>>> result0;
+					private string result1;
+					private Func<string,bool> result2;
+					public No(Tuple<List<int>,Tuple<int,int,string,Tuple<bool,bool>>> arg0, string arg1, Func<string,bool> arg2)
+					{
+						this.result0 = arg0;
+						this.result1 = arg1;
+						this.result2 = arg2;
+					}
+
+					public override void Match(Action<Tuple<List<int>,Tuple<int,int,string,Tuple<bool,bool>>>, string, Func<string,bool>> @no, Action<string> @showone, Action @showthree)
+					{
+						System.Diagnostics.Debug.WriteLine("STATE(MainStoryboardTemplate): +---> no");
+						@no(result0, result1, result2);
+					}
+				}
 
 				internal class ShowOne : Result
 				{
 					private string result0;
 					public ShowOne(string arg0)
 					{
-					this.result0 = arg0;
+						this.result0 = arg0;
 					}
 
-					public override void Match(Action<string> @showone, Action @showthree)
+					public override void Match(Action<Tuple<List<int>,Tuple<int,int,string,Tuple<bool,bool>>>, string, Func<string,bool>> @no, Action<string> @showone, Action @showthree)
 					{
 						System.Diagnostics.Debug.WriteLine("STATE(MainStoryboardTemplate): +---> showone");
 						@showone(result0);
@@ -245,7 +285,7 @@ namespace StoryboardsXamarinFormsDemo.Storyboards
 					{
 					}
 
-					public override void Match(Action<string> @showone, Action @showthree)
+					public override void Match(Action<Tuple<List<int>,Tuple<int,int,string,Tuple<bool,bool>>>, string, Func<string,bool>> @no, Action<string> @showone, Action @showthree)
 					{
 						System.Diagnostics.Debug.WriteLine("STATE(MainStoryboardTemplate): +---> showthree");
 						@showthree();
@@ -253,6 +293,10 @@ namespace StoryboardsXamarinFormsDemo.Storyboards
 				}
 			}
 
+			public void CompleteWithNo(Tuple<List<int>,Tuple<int,int,string,Tuple<bool,bool>>> arg0, string arg1, Func<string,bool> arg2)
+			{
+				completion.TrySetResult(new Result.No(arg0, arg1, arg2));
+			}
 			public void CompleteWithShowOne(string arg0)
 			{
 				completion.TrySetResult(new Result.ShowOne(arg0));

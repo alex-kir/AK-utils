@@ -69,7 +69,7 @@ namespace <#=_props_namespace#>
     {
         private Func<CancellationToken, Task> stateRunner;
         protected CancellationTokenSource cts;
-		
+
         private static CancellationTokenSource NewCts(ref CancellationTokenSource cts, params CancellationToken[] tokens)
         {
             var newCts = tokens.Length == 0 ? new CancellationTokenSource() : CancellationTokenSource.CreateLinkedTokenSource(tokens);
@@ -149,7 +149,7 @@ namespace <#=_props_namespace#>
 <# string argsUsing = string.Join("", link.Types.Select((it, i) => ", arg" + i)); #>
 
 		protected abstract void <#=link.Target.Name#>(<#=link.Target.Name#>State state<#=argsDefinition#>);
-		
+
 		async Task <#=link.Target.Name#>StateRunner(CancellationToken token, <#=link.Target.Name#>State state<#=argsDefinition#>)
         {
 			System.Diagnostics.Debug.WriteLine("STATE(<#=_props_classname#>): <#=link.Target.Name#>");
@@ -203,7 +203,7 @@ namespace <#=_props_namespace#>
 					public <#=link.Name#>(<#=resultArgs#>)
 					{
 <# foreach (var field in link.Types.Select((it, index) => new { name = it, index })) { #>
-					this.result<#=field.index#> = arg<#=field.index#>;
+						this.result<#=field.index#> = arg<#=field.index#>;
 <# } #>
 					}
 
@@ -282,22 +282,20 @@ class Link
 		Source = nodes.First(it => it.ids.Contains(x.Attribute("Source").Value));
 		Target = nodes.First(it => it.ids.Contains(x.Attribute("Target").Value));
 		var label = (x.Attribute("Label")?.Value ?? "");
-		if (label.Contains("("))
+
+		int index = 0;
+		Name = ReadWhileNot(label, ref index, ',', '(');
+		name = Name.ToLower();
+		Types = new string[0];
+		while (index < label.Length)
 		{
-			var n = label.IndexOf("(");
-			Name = label.Substring(0, n);
-			name = Name.ToLower();
-			string t = label.Substring(n).Trim('(', ')', ' ', '\n', '\t');
-			Types = t.Split(',').Where(it => !string.IsNullOrEmpty(it)).ToArray();
+			SkipWhile(label, ref index, '(', ' ', ',');
+			var t1 = ReadWhileNot(label, ref index, ',', '<', ')');
+			var t2 = ReadTemplateArgs(label, ref index);
+			Types = Types.Concat(new []{ t1 + t2 }).ToArray();
+			SkipWhile(label, ref index, ' ', ',', ')');
 		}
-		else
-		{
-			var labels = label.Split(',');
-			Name = labels.First().Trim();
-			name = Name.ToLower();
-			string t = labels.Skip(1).FirstOrDefault() ?? "";
-			Types = new [] { t }.Where(it => !string.IsNullOrEmpty(it)).ToArray();
-		}
+
 		if (!Source.IsComment && !Target.IsComment)
 		{
 			Source.Links.Add(this);
@@ -312,6 +310,62 @@ class Link
 		{
 			Source.Comments.Add(Target.Name);
 			HasComment = true;
+		}
+	}
+
+	private static string ReadTemplateArgs(string str, ref int index)
+	{
+		if (index < str.Length && str[index] == '<')
+		{
+			int counter = 1;
+			int start = index;
+			index++;
+			while (index < str.Length)
+			{
+				char c = str[index];
+				if (c == '<')
+				{
+					counter++;
+				}
+				else if (c == '>')
+				{
+					counter--;
+					if (counter == 0)
+					{
+						index++;
+						break;
+					}
+				}
+				index++;
+			}
+			return str.Substring(start, index - start); 
+		}
+		return "";
+	}
+
+	private static string ReadWhileNot(string str, ref int index, params char [] chars)
+	{
+		int start = index;
+		int end = index;
+		while (index < str.Length)
+		{
+			char c = str[index];
+			if (chars.Contains(c))
+				break;
+			end = index + 1;
+			index++;
+		}
+		return str.Substring(start, end - start);
+	}
+
+	private static void SkipWhile(string str, ref int index, params char [] chars)
+	{
+		while (index < str.Length)
+		{
+			char c = str[index];
+			if (!chars.Contains(c))
+				break;
+			index++;
 		}
 	}
 }
