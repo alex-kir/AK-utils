@@ -69,7 +69,7 @@ namespace <#=_props_namespace#>
     {
         private Func<CancellationToken, Task> stateRunner;
         protected CancellationTokenSource cts;
-		
+
         private static CancellationTokenSource NewCts(ref CancellationTokenSource cts, params CancellationToken[] tokens)
         {
             var newCts = tokens.Length == 0 ? new CancellationTokenSource() : CancellationTokenSource.CreateLinkedTokenSource(tokens);
@@ -89,27 +89,16 @@ namespace <#=_props_namespace#>
 <# foreach (var node in startNodes) { #>
 <# if (node.Links.FirstOrDefault() == null) continue; #>
 <# var nextNode = node.Links.First().Target; #>
-<# var nextNodeType = node.Links.First().Type; #>
-<# if (nextNodeType == "") { #>
-        public async Task RunFrom<#=node.Name#>(CancellationToken externalToken)
+<# var argsDefinition = string.Join("", node.Links.First().Types.Select((it, i) => it + " arg" + i + ", ")); #>
+<# var argsUsing = string.Join("", node.Links.First().Types.Select((it, i) => ", arg" + i)); #>
+        public async Task RunFrom<#=node.Name#>(<#=argsDefinition#>CancellationToken externalToken)
         {
-		    System.Diagnostics.Debug.WriteLine("<#=_props_classname#>: started from <#=node.Name#>");
+		    System.Diagnostics.Debug.WriteLine("<#=_props_classname#>: started from <#=node.Name#>(<#=string.Join(", ", node.Links.First().Types)#>)");
 			var token = NewCts(ref cts, externalToken).Token;
-			Continue(<#=nextNode.Name#>StateRunner, new <#=nextNode.Name#>State());
-			await Run(token);
-        }
-<# } else { #>
-        public async Task RunFrom<#=node.Name#>(<#=nextNodeType#> arg, CancellationToken externalToken)
-        {
-		    System.Diagnostics.Debug.WriteLine("<#=_props_classname#>: started from <#=node.Name#> with <#=nextNodeType#>");
-			var token = NewCts(ref cts, externalToken).Token;
-			Continue(<#=nextNode.Name#>StateRunner, new <#=nextNode.Name#>State(), arg);
+			Continue(<#=nextNode.Name#>StateRunner, new <#=nextNode.Name#>State()<#=argsUsing#>);
 			await Run(token);
         }
 <# } #>
-
-<# } #>
-
 
 		private async Task Run(CancellationToken token)
         {
@@ -139,18 +128,28 @@ namespace <#=_props_namespace#>
             stateRunner = token => nextRunner(token, state);
         }
 
-		protected void Continue<TState,T1>(Func<CancellationToken, TState, T1, Task> nextRunner, TState state, T1 arg1)
+		protected void Continue<TState, T1>(Func<CancellationToken, TState, T1, Task> nextRunner, TState state, T1 arg1)
         {
             stateRunner = token => nextRunner(token, state, arg1);
         }
 
+		protected void Continue<TState, T1, T2>(Func<CancellationToken, TState, T1, T2, Task> nextRunner, TState state, T1 arg1, T2 arg2)
+        {
+            stateRunner = token => nextRunner(token, state, arg1, arg2);
+        }
+
+		protected void Continue<TState, T1, T2, T3>(Func<CancellationToken, TState, T1, T2, T3, Task> nextRunner, TState state, T1 arg1, T2 arg2, T3 arg3)
+        {
+            stateRunner = token => nextRunner(token, state, arg1, arg2, arg3);
+        }
+
 		// ------------------ transitions --------------------------- //
-<# foreach (var link in links.Where(it => !it.HasComment).GroupBy(it => it.Target.Name + "#" + it.Type).OrderBy(it => it.Key).Select(it => it.First()).ToList()) { #>
-<# string argsDefinition = (link.Type == "" ? "" : ", " + link.Type + " arg1"); #>
-<# string argsUsing = (link.Type == "" ? "" : ", arg1"); #>
+<# foreach (var link in links.Where(it => !it.HasComment).GroupBy(it => it.Target.Name + "#" + string.Join("#", it.Types)).OrderBy(it => it.Key).Select(it => it.First()).ToList()) { #>
+<# string argsDefinition = string.Join("", link.Types.Select((it, i) => ", " + it + " arg" + i)); #>
+<# string argsUsing = string.Join("", link.Types.Select((it, i) => ", arg" + i)); #>
 
 		protected abstract void <#=link.Target.Name#>(<#=link.Target.Name#>State state<#=argsDefinition#>);
-		
+
 		async Task <#=link.Target.Name#>StateRunner(CancellationToken token, <#=link.Target.Name#>State state<#=argsDefinition#>)
         {
 			System.Diagnostics.Debug.WriteLine("STATE(<#=_props_classname#>): <#=link.Target.Name#>");
@@ -158,13 +157,8 @@ namespace <#=_props_namespace#>
 
             (await state.GetResult(token)).Match(
 <# string comma = ""; foreach (var result in link.Target.Links) { #>
-<# if (result.Target.Name == "[STOP]") { #>
-				<#=comma#>@<#=result.name#>: Stop
-<# } else if (result.Type == "") { #>
-				<#=comma#>@<#=result.name#>: () => Continue(<#=result.Target.Name#>StateRunner, new <#=result.Target.Name#>State())
-<# } else { #>
-				<#=comma#>@<#=result.name#>: it => Continue(<#=result.Target.Name#>StateRunner, new <#=result.Target.Name#>State(), it)
-<# } #>
+<# string resultArgs = string.Join("", result.Types.Select((it, i) => ", it" + i)); #>
+				<#=comma#>@<#=result.name#>: (<#=resultArgs.TrimStart(',', ' ')#>) => Continue(<#=result.Target.Name#>StateRunner, new <#=result.Target.Name#>State()<#=resultArgs#>)
 <# comma = ", "; } #>
                 );
         }
@@ -189,58 +183,46 @@ namespace <#=_props_namespace#>
 				return completion.Task;
 			}
 		}
-<# foreach (var node in nodes) { #>
 
-<# var matchArgs = string.Join(", ", node.Links.Select(it => "Action" + (it.Type != "" ? "<" + it.Type + ">" : "") + " @" + it.name)); #>
+<# foreach (var node in nodes) { #>
+<# string matchArgs = string.Join(", ", node.Links.Select(it => "Action" + (it.Types.Any() ? "<" + string.Join(", ", it.Types) + ">" : "") + " @" + it.name)); #>
 		<#=_props_classmodificator#> partial class <#=node.Name#>State : State<<#=node.Name#>State.Result>
 		{
 			<#=_props_classmodificator#> abstract class Result
 			{
 				public abstract void Match(<#=matchArgs#>);
 <# foreach (var link in node.Links) { #>
+<# string resultArgs = string.Join(", ", link.Types.Select((it, i) => it + " arg" + i)); #>
+<# string result0Args = string.Join(", ", link.Types.Select((it, i) => "result" + i)); #>
 
-<# if (link.Type == "") { #>
 				<#=_props_classmodificator#> class <#=link.Name#> : Result
 				{
-					public override void Match(<#=matchArgs#>)
-					{
-						System.Diagnostics.Debug.WriteLine("STATE(<#=_props_classname#>): +---> <#=link.name#>");
-						@<#=link.name#>();
-					}
-				}
-<# } else {#>
-				<#=_props_classmodificator#> class <#=link.Name#> : Result
-				{
-					private <#=link.Type#> result;
-
-					public <#=link.Name#>(<#=link.Type#> result)
-					{
-						this.result = result;
-					}
-
-					public override void Match(<#=matchArgs#>)
-					{
-						System.Diagnostics.Debug.WriteLine("STATE(<#=_props_classname#>): +---> <#=link.name#>");
-						@<#=link.name#>(result);
-					}
-				}
+<# foreach (var field in link.Types.Select((it, index) => new { name = it, index })) { #>
+					private <#=field.name#> result<#=field.index#>;
 <# } #>
+					public <#=link.Name#>(<#=resultArgs#>)
+					{
+<# foreach (var field in link.Types.Select((it, index) => new { name = it, index })) { #>
+						this.result<#=field.index#> = arg<#=field.index#>;
+<# } #>
+					}
+
+					public override void Match(<#=matchArgs#>)
+					{
+						System.Diagnostics.Debug.WriteLine("STATE(<#=_props_classname#>): +---> <#=link.name#>");
+						@<#=link.name#>(<#=result0Args#>);
+					}
+				}
 <# } #>
 			}
 
 <# foreach (var link in node.Links) { #>
-
-<# if (link.Type == "") { #>
-			public void CompleteWith<#=link.Name#>()
+<# string argsDefinition = string.Join(", ", link.Types.Select((it, i) => it + " arg" + i)); #>
+<# string argsUsing = string.Join(", ", link.Types.Select((it, i) => "arg" + i)); #>
+			public void CompleteWith<#=link.Name#>(<#=argsDefinition#>)
 			{
-				completion.TrySetResult(new Result.<#=link.Name#>());
+				completion.TrySetResult(new Result.<#=link.Name#>(<#=argsUsing#>));
 			}
-<# } else {#>
-			public void CompleteWith<#=link.Name#>(<#=link.Type#> result)
-			{
-				completion.TrySetResult(new Result.<#=link.Name#>(result));
-			}
-<# } #>
 <# } #>
 		}
 <# } #>
@@ -292,17 +274,28 @@ class Link
 	internal Node Target { get; private set; }
 	internal string Name { get; private set; }
 	internal string name { get; private set; }
-	internal string Type { get; private set; }
+	internal string[] Types { get; private set; }
 	internal bool HasComment { get; private set; }
 
 	internal Link(XElement x, IList<Node> nodes)
 	{
 		Source = nodes.First(it => it.ids.Contains(x.Attribute("Source").Value));
 		Target = nodes.First(it => it.ids.Contains(x.Attribute("Target").Value));
-		var labels = (x.Attribute("Label")?.Value ?? "").Split(',');
-		Name = labels.First().Trim();
+		var label = (x.Attribute("Label")?.Value ?? "");
+
+		int index = 0;
+		Name = ReadWhileNot(label, ref index, ',', '(');
 		name = Name.ToLower();
-		Type = labels.Skip(1).FirstOrDefault() ?? "";
+		Types = new string[0];
+		while (index < label.Length)
+		{
+			SkipWhile(label, ref index, '(', ' ', ',');
+			var t1 = ReadWhileNot(label, ref index, ',', '<', ')');
+			var t2 = ReadTemplateArgs(label, ref index);
+			Types = Types.Concat(new []{ t1 + t2 }).ToArray();
+			SkipWhile(label, ref index, ' ', ',', ')');
+		}
+
 		if (!Source.IsComment && !Target.IsComment)
 		{
 			Source.Links.Add(this);
@@ -317,6 +310,62 @@ class Link
 		{
 			Source.Comments.Add(Target.Name);
 			HasComment = true;
+		}
+	}
+
+	private static string ReadTemplateArgs(string str, ref int index)
+	{
+		if (index < str.Length && str[index] == '<')
+		{
+			int counter = 1;
+			int start = index;
+			index++;
+			while (index < str.Length)
+			{
+				char c = str[index];
+				if (c == '<')
+				{
+					counter++;
+				}
+				else if (c == '>')
+				{
+					counter--;
+					if (counter == 0)
+					{
+						index++;
+						break;
+					}
+				}
+				index++;
+			}
+			return str.Substring(start, index - start); 
+		}
+		return "";
+	}
+
+	private static string ReadWhileNot(string str, ref int index, params char [] chars)
+	{
+		int start = index;
+		int end = index;
+		while (index < str.Length)
+		{
+			char c = str[index];
+			if (chars.Contains(c))
+				break;
+			end = index + 1;
+			index++;
+		}
+		return str.Substring(start, end - start);
+	}
+
+	private static void SkipWhile(string str, ref int index, params char [] chars)
+	{
+		while (index < str.Length)
+		{
+			char c = str[index];
+			if (!chars.Contains(c))
+				break;
+			index++;
 		}
 	}
 }
