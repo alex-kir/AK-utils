@@ -305,12 +305,12 @@ public class AKJson
     #region Decoding
 
 
-    public static T TransformObject<T>(object source)
+    public static T TransformObject<T>(object source, params Type [] additionalTypes)
     {
-        return (T)TransformObject(source, typeof(T));
+        return (T)TransformObject(source, typeof(T), additionalTypes);
     }
 
-    private static object TransformObject(object source, Type type)
+    private static object TransformObject(object source, Type type, Type[] additionalTypes)
     {
         if (type == null)
             throw new ArgumentNullException("type", "Transform object failed");
@@ -328,17 +328,18 @@ public class AKJson
             var ret = (IDictionary)Activator.CreateInstance(type);
             foreach (var key in dictionary.Keys)
             {
-                ret.Add(TransformObject(key, keyType), TransformObject(dictionary[key], valueType));
+                ret.Add(TransformObject(key, keyType, additionalTypes), TransformObject(dictionary[key], valueType, additionalTypes));
             }
             return ret;
         }
 
-        if (type.HasCustomAttribute(typeof(AKJson.Serializable)))
+        bool isAdditionalType = additionalTypes.Contains(type);
+
+        if (isAdditionalType || type.HasCustomAttribute(typeof(AKJson.Serializable)))
         {
             var dictionary = (source as IDictionary);
             var ret = Activator.CreateInstance(type);
-            var attr = type.GetCustomAttribute<AKJson.Serializable>();
-            var mode = attr.Mode;
+            var mode = isAdditionalType ? SerializableModes.PublicProperties : type.GetCustomAttribute<AKJson.Serializable>().Mode;
 
             // --- Scan Properties ---
             foreach (var property in type.GetRuntimeProperties())
@@ -352,7 +353,7 @@ public class AKJson
                         yes = true;
                     if (yes)
                     {
-                        var val = TransformObject(dictionary[property.Name], property.PropertyType);
+                        var val = TransformObject(dictionary[property.Name], property.PropertyType, additionalTypes);
                         if (property.SetMethod == null)
                         {
                             continue;
@@ -368,7 +369,7 @@ public class AKJson
                 var fieldAttributes = field.GetCustomAttributes(typeof(AKJson.Serializable), true);
                 if (fieldAttributes.FirstOrDefault() != null && dictionary.Contains(field.Name))
                 {
-                    var val = TransformObject(dictionary[field.Name], field.FieldType);
+                    var val = TransformObject(dictionary[field.Name], field.FieldType, additionalTypes);
                     field.SetValue(ret, val);
                 }
             }
@@ -383,7 +384,7 @@ public class AKJson
             var ret = (IList)Activator.CreateInstance(type);
             foreach (object item in list)
             {
-                ret.Add(TransformObject(item, itemType));
+                ret.Add(TransformObject(item, itemType, additionalTypes));
             }
             return ret;
         }
@@ -395,7 +396,7 @@ public class AKJson
             int index = 0;
             foreach (var item in list)
             {
-                ret.SetValue(TransformObject(item, valueType), index);
+                ret.SetValue(TransformObject(item, valueType, additionalTypes), index);
                 index++;
             }
             return ret;
@@ -441,7 +442,7 @@ public class AKJson
     public static T Decode<T>(string json) where T : class
     {
         object obj = new AKJson().DecodeJson(json);
-        return (T)TransformObject(obj, typeof(T));
+        return (T)TransformObject(obj, typeof(T), new Type[0]);
     }
 
     public static T DecodeOrNull<T>(string json) where T : class
@@ -453,7 +454,7 @@ public class AKJson
             object obj = new AKJson().DecodeJson(json);
             if (obj == null)
                 return null;
-            return (T)TransformObject(obj, typeof(T));
+            return (T)TransformObject(obj, typeof(T), new Type[0]);
         }
 #if DEBUG
         catch (Exception ex)
